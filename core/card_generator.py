@@ -1,0 +1,725 @@
+"""
+core/card_generator.py — Generator kartu perpustakaan massal
+
+Alur:
+1. Upload Excel sumber (kolom: Nama, [opsional: Kelas, dll])
+2. Generate ID Barcode otomatis: "{YYYY}-{NNNN}" (contoh: 2025-0001)
+3. Simpan ke anggota.xlsx (append / buat baru)
+4. Generate gambar barcode Code 128 per anggota → folder barcode_images/
+5. Generate .docx berisi tabel kartu (N kartu per halaman) siap cetak
+"""
+
+import logging
+import os
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+import openpyxl
+from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
+from barcode import Code128
+from barcode.writer import ImageWriter
+from docx import Document
+from docx.shared import Cm, Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_ALIGN_VERTICAL
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+from PIL import Image
+import io
+
+from config import (
+    MEMBER_EXCEL_PATH,
+    BASE_DIR,
+    EXCEL_COL_BARCODE,
+    EXCEL_COL_NAME,
+)
+from database.excel_reader import invalidate_cache
+
+logger = logging.getLogger(__name__)
+
+# ── Direktori output ──────────────────────────────────────────────────────────
+BARCODE_DIR: Path  = BASE_DIR / "assets" / "barcode_images"
+CARDS_DIR: Path    = BASE_DIR / "assets" / "kartu_output"
+
+# Ukuran kartu perpustakaan (kertas jeruk) dalam cm
+CARD_WIDTH_CM  = 8.5
+CARD_HEIGHT_CM = 5.5
+CARDS_PER_ROW  = 2   # 2 kartu per baris di halaman A4
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Fungsi utilitas
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _ensure_dirs() -> None:
+    BARCODE_DIR.mkdir(parents=True, exist_ok=True)
+    CARDS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _get_next_barcode_id(existing_ids: list[str], year: int) -> str:
+    """
+    Generate ID barcode berikutnya dalam format YYYY-NNNN.
+    Urutan number dilanjutkan dari ID terbesar yang sudah ada di tahun yang sama.
+    """
+    prefix = f"{year}-"
+    year_ids = [
+        int(bid[len(prefix):])
+        for bid in existing_ids
+        if bid.startswith(prefix) and bid[len(prefix):].isdigit()
+    ]
+    next_num = (max(year_ids) + 1) if year_ids else 1
+    return f"{year}-{next_num:04d}"
+
+
+def _load_existing_members() -> tuple[list[dict], list[str]]:
+    """
+    Baca anggota.xlsx yang sudah ada.
+    Returns: (list_rows, list_barcode_ids)
+    """
+    if not MEMBER_EXCEL_PATH.exists():
+        return [], []
+
+    wb = openpyxl.load_workbook(str(MEMBER_EXCEL_PATH))
+    ws = wb.active
+    headers = [str(c.value).strip() if c.value else "" for c in next(ws.iter_rows(max_row=1))]
+    rows = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        rec = dict(zip(headers, row))
+        if rec.get(EXCEL_COL_BARCODE) or rec.get(EXCEL_COL_NAME):
+            rows.append(rec)
+    wb.close()
+
+    existing_ids = [str(r[EXCEL_COL_BARCODE]).strip() for r in rows if r.get(EXCEL_COL_BARCODE)]
+    return rows, existing_ids
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Step 1: Baca file Excel sumber (daftar nama)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def read_source_excel(path: str | Path) -> list[dict]:
+    """
+    Baca file Excel sumber yang diupload user.
+    Kolom wajib: 'Nama'
+    Kolom opsional tambahan akan ikut disimpan.
+
+    Returns:
+        list of dict — data anggota baru (belum ada barcode)
+    Raises:
+        FileNotFoundError, ValueError
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"File tidak ditemukan: {path}")
+
+    wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+    ws = wb.active
+    headers = [str(c.value).strip() if c.value else "" for c in next(ws.iter_rows(max_row=1))]
+
+    if "Nama" not in headers:
+        wb.close()
+        raise ValueError(
+            f"Kolom 'Nama' tidak ditemukan. Kolom tersedia: {headers}"
+        )
+
+    members = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        rec = dict(zip(headers, row))
+        nama = str(rec.get("Nama", "")).strip()
+        if not nama or nama.lower() == "none":
+            continue
+        rec["Nama"] = nama
+        members.append(rec)
+
+    wb.close()
+    logger.info("Sumber Excel dibaca: %d anggota baru dari %s", len(members), path.name)
+    return members
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Step 2: Assign barcode ID & update anggota.xlsx
+# ══════════════════════════════════════════════════════════════════════════════
+
+def assign_barcode_ids(
+    new_members: list[dict],
+    year: Optional[int] = None,
+    id_column: Optional[str] = None,
+) -> tuple[list[dict], list[str]]:
+    """
+    Assign ID Barcode ke setiap anggota baru.
+
+    Mode 1 — Generate otomatis (id_column=None):
+        Format: YYYY-NNNN, dilanjutkan dari ID terbesar di anggota.xlsx.
+
+    Mode 2 — Kolom kustom (id_column="NISN" atau kolom lain):
+        Ambil nilai dari kolom tersebut sebagai ID Barcode.
+        Baris dengan nilai kosong akan dilewati dan dilaporkan sebagai warning.
+
+    Args:
+        new_members : list dari read_source_excel()
+        year        : tahun untuk prefix ID (Mode 1 saja)
+        id_column   : nama kolom sumber ID kustom (Mode 2)
+
+    Returns:
+        tuple (members_with_id, warnings)
+        - members_with_id : list[dict] dengan key EXCEL_COL_BARCODE terisi
+        - warnings        : list[str] baris yang dilewati karena ID kosong/duplikat
+    """
+    if year is None:
+        year = datetime.now().year
+
+    _, existing_ids = _load_existing_members()
+    existing_id_set = set(existing_ids)
+    result   = []
+    warnings = []
+
+    if id_column is None:
+        # ── Mode 1: generate otomatis ─────────────────────────────────────────
+        current_ids = list(existing_ids)
+        for member in new_members:
+            barcode_id = _get_next_barcode_id(current_ids, year)
+            member[EXCEL_COL_BARCODE] = barcode_id
+            current_ids.append(barcode_id)
+            existing_id_set.add(barcode_id)
+            result.append(member)
+            logger.debug("Assign ID otomatis: %s → %s", member.get("Nama", ""), barcode_id)
+    else:
+        # ── Mode 2: pakai kolom kustom ────────────────────────────────────────
+        seen_in_batch = set()
+        for member in new_members:
+            raw = member.get(id_column, "")
+            barcode_id = str(raw).strip() if raw is not None else ""
+
+            nama = member.get("Nama", "(tanpa nama)")
+
+            if not barcode_id or barcode_id.lower() == "none":
+                msg = f"Dilewati — kolom '{id_column}' kosong untuk: {nama}"
+                warnings.append(msg)
+                logger.warning(msg)
+                continue
+
+            if barcode_id in existing_id_set:
+                msg = f"Dilewati — ID '{barcode_id}' sudah ada di anggota.xlsx: {nama}"
+                warnings.append(msg)
+                logger.warning(msg)
+                continue
+
+            if barcode_id in seen_in_batch:
+                msg = f"Dilewati — ID '{barcode_id}' duplikat dalam file sumber: {nama}"
+                warnings.append(msg)
+                logger.warning(msg)
+                continue
+
+            member[EXCEL_COL_BARCODE] = barcode_id
+            seen_in_batch.add(barcode_id)
+            existing_id_set.add(barcode_id)
+            result.append(member)
+            logger.debug("Assign ID kustom: %s → %s", nama, barcode_id)
+
+    return result, warnings
+
+
+def save_to_member_excel(members_with_id: list[dict]) -> int:
+    """
+    Append anggota baru ke anggota.xlsx.
+    Jika file belum ada, buat baru dengan header.
+
+    Returns:
+        Jumlah baris yang berhasil ditambahkan
+    """
+    # Kumpulkan semua header yang ada di data baru
+    all_keys = [EXCEL_COL_BARCODE, EXCEL_COL_NAME]
+    for m in members_with_id:
+        for k in m.keys():
+            if k not in all_keys:
+                all_keys.append(k)
+
+    if MEMBER_EXCEL_PATH.exists():
+        wb = openpyxl.load_workbook(str(MEMBER_EXCEL_PATH))
+        ws = wb.active
+        # Baca header existing
+        existing_headers = [
+            str(c.value).strip() if c.value else ""
+            for c in next(ws.iter_rows(max_row=1))
+        ]
+        # Tambahkan header baru jika ada kolom tambahan
+        for key in all_keys:
+            if key not in existing_headers:
+                existing_headers.append(key)
+                ws.cell(row=1, column=len(existing_headers)).value = key
+    else:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Anggota"
+        existing_headers = all_keys
+        for col, header in enumerate(existing_headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill("solid", fgColor="1F4E79")
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.alignment = Alignment(horizontal="center")
+
+    # Append baris baru
+    count = 0
+    for member in members_with_id:
+        row_data = [member.get(h, "") for h in existing_headers]
+        ws.append(row_data)
+        count += 1
+
+    # Auto-width kolom
+    for col in ws.columns:
+        max_len = max((len(str(c.value or "")) for c in col), default=0)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+
+    wb.save(str(MEMBER_EXCEL_PATH))
+    invalidate_cache()
+    logger.info("%d anggota berhasil disimpan ke %s", count, MEMBER_EXCEL_PATH.name)
+    return count
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Step 3: Generate gambar barcode
+# ══════════════════════════════════════════════════════════════════════════════
+
+def generate_barcode_images(
+    members_with_id: list[dict],
+    on_progress=None,
+) -> dict[str, Path]:
+    """
+    Generate gambar barcode Code 128 PNG untuk setiap anggota.
+
+    Args:
+        members_with_id : list hasil assign_barcode_ids()
+        on_progress     : callback(current, total) untuk progress bar GUI
+
+    Returns:
+        dict barcode_id → Path file PNG
+    """
+    _ensure_dirs()
+    results: dict[str, Path] = {}
+    total = len(members_with_id)
+
+    for idx, member in enumerate(members_with_id):
+        barcode_id = member[EXCEL_COL_BARCODE]
+        safe_name  = barcode_id.replace("/", "-").replace("\\", "-")
+        out_path   = BARCODE_DIR / f"{safe_name}.png"
+
+        try:
+            # Generate barcode ke bytes buffer
+            buf = io.BytesIO()
+            writer = ImageWriter()
+            writer.set_options({
+                "module_width":  0.9,
+                "module_height": 8.0,
+                "quiet_zone":    2.0,
+                "font_size":     7,
+                "text_distance": 2.5,
+                "write_text":    True,
+                "dpi":           300,
+                "foreground":    "black",
+                "background":    "white",
+            })
+            code = Code128(barcode_id, writer=writer)
+            code.write(buf, options={"write_text": True})
+
+            # Simpan PNG
+            buf.seek(0)
+            img = Image.open(buf)
+            img.save(str(out_path), "PNG", dpi=(300, 300))
+            results[barcode_id] = out_path
+            logger.debug("Barcode PNG: %s → %s", barcode_id, out_path.name)
+
+        except Exception as exc:
+            logger.error("Gagal generate barcode %s: %s", barcode_id, exc)
+
+        if on_progress:
+            on_progress(idx + 1, total)
+
+    logger.info("Generate barcode selesai: %d/%d berhasil", len(results), total)
+    return results
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Step 4: Generate .docx kartu massal
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _set_cell_border(cell, sides=None, color="AAAAAA", sz="6") -> None:
+    """Set border pada cell tabel Word."""
+    if sides is None:
+        sides = ["top", "left", "bottom", "right"]
+    tcPr = cell._tc.get_or_add_tcPr()
+    tcBorders = OxmlElement("w:tcBorders")
+    for side in sides:
+        el = OxmlElement(f"w:{side}")
+        el.set(qn("w:val"),   "single")
+        el.set(qn("w:sz"),    sz)
+        el.set(qn("w:space"), "0")
+        el.set(qn("w:color"), color)
+        tcBorders.append(el)
+    tcPr.append(tcBorders)
+
+
+def _set_cell_bg(cell, hex_color: str) -> None:
+    """Set background warna cell."""
+    tcPr = cell._tc.get_or_add_tcPr()
+    shd  = OxmlElement("w:shd")
+    shd.set(qn("w:val"),   "clear")
+    shd.set(qn("w:color"), "auto")
+    shd.set(qn("w:fill"),  hex_color)
+    tcPr.append(shd)
+
+
+def _set_cell_margin(cell, top=60, bottom=60, left=80, right=80) -> None:
+    """Set margin dalam cell (dalam twips, 1cm ≈ 567 twips)."""
+    tcPr  = cell._tc.get_or_add_tcPr()
+    tcMar = OxmlElement("w:tcMar")
+    for side, val in [("top", top), ("bottom", bottom), ("left", left), ("right", right)]:
+        el = OxmlElement(f"w:{side}")
+        el.set(qn("w:w"),    str(val))
+        el.set(qn("w:type"), "dxa")
+        tcMar.append(el)
+    tcPr.append(tcMar)
+
+
+def _para(cell_or_table, text: str, size_pt: float,
+          bold=False, color="1a1a1a",
+          align=WD_ALIGN_PARAGRAPH.LEFT,
+          space_before=0, space_after=0,
+          italic=False) -> None:
+    """Tambah paragraf ke cell dengan format tertentu."""
+    para = cell_or_table.add_paragraph()
+    para.alignment = align
+    para.paragraph_format.space_before = Pt(space_before)
+    para.paragraph_format.space_after  = Pt(space_after)
+    run = para.add_run(text)
+    run.bold       = bold
+    run.italic     = italic
+    run.font.size  = Pt(size_pt)
+    run.font.color.rgb = RGBColor.from_string(color)
+
+
+def _add_card_to_cell(
+    outer_cell,
+    member: dict,
+    barcode_path: Optional[Path],
+    school_name: str,
+) -> None:
+    """
+    Isi outer_cell dengan kartu perpustakaan layout:
+
+        ┌─────────────────────────────────────┐
+        │   Nama Sekolah (bold, center)        │  ← header row, full width
+        │   Kartu Perpustakaan (center)        │
+        ├──────────────────────┬──────────────┤
+        │  Nama: ...           │  [BARCODE]   │  ← info kiri, barcode kanan
+        │  ID Kartu: ...       │              │
+        └──────────────────────┴──────────────┘
+    """
+    # Bersihkan isi default outer_cell
+    for p in outer_cell.paragraphs:
+        p.clear()
+    outer_cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+
+    # Border luar kartu (tebal)
+    _set_cell_border(outer_cell, color="888888", sz="8")
+    _set_cell_margin(outer_cell, top=0, bottom=0, left=0, right=0)
+
+    # ── Buat nested table 2 baris × 1 kolom di dalam outer_cell ──────────────
+    # Baris 1: header (full width)
+    # Baris 2: inner table 1×2 (info | barcode)
+    p = outer_cell.paragraphs[0]._p
+
+    nested = outer_cell.add_table(rows=2, cols=1)
+    nested.style = "Table Grid"
+
+    # Paksa nested table ikut lebar outer cell
+    tbl  = nested._tbl
+    tblPr = tbl.find(qn("w:tblPr"))
+    if tblPr is None:
+        tblPr = OxmlElement("w:tblPr")
+        tbl.insert(0, tblPr)
+    tblW = OxmlElement("w:tblW")
+    tblW.set(qn("w:w"),    "5000")
+    tblW.set(qn("w:type"), "pct")   # 100% lebar parent cell
+    tblPr.append(tblW)
+
+    # ── Baris 1: Header ───────────────────────────────────────────────────────
+    header_cell = nested.cell(0, 0)
+    header_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    _set_cell_bg(header_cell, "FFFFFF")
+    _set_cell_margin(header_cell, top=80, bottom=40, left=100, right=100)
+    _set_cell_border(header_cell, sides=["bottom"], color="888888", sz="6")
+
+    # Kosongkan paragraf default
+    for p in header_cell.paragraphs:
+        p.clear()
+
+    # Nama sekolah (bold, besar, center)
+    p1 = header_cell.paragraphs[0]
+    p1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p1.paragraph_format.space_before = Pt(0)
+    p1.paragraph_format.space_after  = Pt(2)
+    r1 = p1.add_run(school_name)
+    r1.bold      = True
+    r1.font.size = Pt(12)
+    r1.font.color.rgb = RGBColor(0x1a, 0x1a, 0x1a)
+
+    # "Kartu Perpustakaan" (tidak bold, sedikit lebih kecil)
+    p2 = header_cell.add_paragraph()
+    p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p2.paragraph_format.space_before = Pt(0)
+    p2.paragraph_format.space_after  = Pt(0)
+    r2 = p2.add_run("Kartu Perpustakaan")
+    r2.bold      = False
+    r2.font.size = Pt(10)
+    r2.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+
+    # ── Baris 2: Info + Barcode ───────────────────────────────────────────────
+    body_cell = nested.cell(1, 0)
+    _set_cell_bg(body_cell, "FFFFFF")
+    _set_cell_margin(body_cell, top=0, bottom=0, left=0, right=0)
+
+    # Inner table 1×2 di dalam body_cell
+    inner = body_cell.add_table(rows=1, cols=2)
+    inner.style = "Table Grid"
+
+    # Lebar: kiri 55%, kanan 45%
+    inner_tbl  = inner._tbl
+    inner_tblPr = inner_tbl.find(qn("w:tblPr"))
+    if inner_tblPr is None:
+        inner_tblPr = OxmlElement("w:tblPr")
+        inner_tbl.insert(0, inner_tblPr)
+    inner_tblW = OxmlElement("w:tblW")
+    inner_tblW.set(qn("w:w"),    "5000")
+    inner_tblW.set(qn("w:type"), "pct")
+    inner_tblPr.append(inner_tblW)
+
+    # Set lebar kolom inner (dalam pct twips)
+    for col_idx, col in enumerate(inner.columns):
+        for c in col.cells:
+            tcPr = c._tc.get_or_add_tcPr()
+            tcW  = OxmlElement("w:tcW")
+            pct  = "2750" if col_idx == 0 else "2250"   # 55% : 45%
+            tcW.set(qn("w:w"),    pct)
+            tcW.set(qn("w:type"), "pct")
+            tcPr.append(tcW)
+
+    # ── Sel kiri: nama + id ───────────────────────────────────────────────────
+    left_cell = inner.cell(0, 0)
+    left_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    _set_cell_margin(left_cell, top=80, bottom=80, left=100, right=60)
+    _set_cell_border(left_cell, sides=["right"], color="AAAAAA", sz="4")
+
+    for p in left_cell.paragraphs:
+        p.clear()
+
+    nama = member.get(EXCEL_COL_NAME, "")
+    bid  = member.get(EXCEL_COL_BARCODE, "")
+
+    p_nama = left_cell.paragraphs[0]
+    p_nama.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p_nama.paragraph_format.space_before = Pt(0)
+    p_nama.paragraph_format.space_after  = Pt(4)
+    r_nama = p_nama.add_run(f"Nama: {nama}")
+    r_nama.bold      = True
+    r_nama.font.size = Pt(10)
+    r_nama.font.color.rgb = RGBColor(0x1a, 0x1a, 0x1a)
+
+    p_id = left_cell.add_paragraph()
+    p_id.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p_id.paragraph_format.space_before = Pt(0)
+    p_id.paragraph_format.space_after  = Pt(0)
+    r_id = p_id.add_run(f"ID Kartu: {bid}")
+    r_id.bold      = False
+    r_id.font.size = Pt(9)
+    r_id.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+
+    # Kolom opsional tambahan (Kelas, NIS, dll)
+    for key in member:
+        if key not in (EXCEL_COL_BARCODE, EXCEL_COL_NAME):
+            val = str(member.get(key, "") or "").strip()
+            if val and val.lower() != "none":
+                px = left_cell.add_paragraph()
+                px.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                px.paragraph_format.space_before = Pt(0)
+                px.paragraph_format.space_after  = Pt(0)
+                rx = px.add_run(f"{key}: {val}")
+                rx.font.size = Pt(8)
+                rx.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+
+    # ── Sel kanan: gambar barcode ─────────────────────────────────────────────
+    right_cell = inner.cell(0, 1)
+    right_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    _set_cell_margin(right_cell, top=60, bottom=60, left=60, right=60)
+
+    for p in right_cell.paragraphs:
+        p.clear()
+
+    if barcode_path and barcode_path.exists():
+        p_bc = right_cell.paragraphs[0]
+        p_bc.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_bc.paragraph_format.space_before = Pt(0)
+        p_bc.paragraph_format.space_after  = Pt(0)
+        run_bc = p_bc.add_run()
+        run_bc.add_picture(str(barcode_path), width=Cm(3.2))
+    else:
+        p_bc = right_cell.paragraphs[0]
+        p_bc.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r_na = p_bc.add_run("[no barcode]")
+        r_na.font.size = Pt(7)
+        r_na.font.color.rgb = RGBColor(0xAA, 0xAA, 0xAA)
+
+
+def generate_cards_docx(
+    members_with_id: list[dict],
+    barcode_paths: dict[str, Path],
+    school_name: str = "SMA Negeri 1",
+    cards_per_row: int = CARDS_PER_ROW,
+    on_progress=None,
+) -> Path:
+    """
+    Generate file .docx berisi kartu perpustakaan massal.
+    Setiap halaman berisi grid kartu dengan tata letak tabel.
+
+    Args:
+        members_with_id : list anggota dengan barcode ID
+        barcode_paths   : dict dari generate_barcode_images()
+        school_name     : nama sekolah untuk header kartu
+        cards_per_row   : jumlah kartu per baris (default 2)
+        on_progress     : callback(current, total)
+
+    Returns:
+        Path file .docx yang dihasilkan
+    """
+    _ensure_dirs()
+
+    doc = Document()
+
+    # ── Setup halaman A4 portrait ────────────────────────────────────────────
+    section = doc.sections[0]
+    section.page_width  = Cm(21.0)
+    section.page_height = Cm(29.7)
+    section.left_margin   = Cm(1.5)
+    section.right_margin  = Cm(1.5)
+    section.top_margin    = Cm(1.5)
+    section.bottom_margin = Cm(1.5)
+
+    # ── Hitung baris tabel ────────────────────────────────────────────────────
+    total = len(members_with_id)
+    n_rows = (total + cards_per_row - 1) // cards_per_row
+
+    # ── Buat tabel ────────────────────────────────────────────────────────────
+    table = doc.add_table(rows=n_rows, cols=cards_per_row)
+    table.style = "Table Grid"
+
+    # Set lebar kolom
+    col_width = Cm(CARD_WIDTH_CM)
+    for col in table.columns:
+        for cell in col.cells:
+            cell.width = col_width
+
+    # ── Isi tabel dengan kartu ────────────────────────────────────────────────
+    for idx, member in enumerate(members_with_id):
+        row_idx = idx // cards_per_row
+        col_idx = idx  % cards_per_row
+        cell    = table.cell(row_idx, col_idx)
+        barcode_id   = member.get(EXCEL_COL_BARCODE, "")
+        barcode_path = barcode_paths.get(barcode_id)
+        _add_card_to_cell(cell, member, barcode_path, school_name)
+
+        if on_progress:
+            on_progress(idx + 1, total)
+
+    # Set tinggi baris
+    for row in table.rows:
+        row.height = Cm(CARD_HEIGHT_CM)
+
+    # ── Simpan ────────────────────────────────────────────────────────────────
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_path  = CARDS_DIR / f"kartu_perpustakaan_{timestamp}.docx"
+    doc.save(str(out_path))
+    logger.info("Dokumen kartu berhasil dibuat: %s", out_path.name)
+    return out_path
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Fungsi utama (entry point dari GUI)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def run_card_generation(
+    source_excel_path: str | Path,
+    school_name: str,
+    year: Optional[int] = None,
+    id_column: Optional[str] = None,
+    on_progress=None,
+) -> dict:
+    """
+    Jalankan seluruh pipeline pembuatan kartu massal.
+
+    Args:
+        source_excel_path : path file Excel sumber
+        school_name       : nama sekolah untuk header kartu
+        year              : tahun ID (hanya untuk mode generate otomatis)
+        id_column         : kolom kustom sebagai ID barcode (None = generate otomatis)
+        on_progress       : callback(stage, current, total)
+
+    Returns dict dengan key:
+        'members'     : list[dict] anggota yang diproses
+        'docx_path'   : Path file .docx output
+        'barcode_dir' : Path folder gambar barcode
+        'count'       : int jumlah kartu dibuat
+        'warnings'    : list[str] baris yang dilewati
+        'errors'      : list[str] error fatal
+    """
+    errors   = []
+    warnings = []
+
+    # Step 1: Baca sumber
+    new_members = read_source_excel(source_excel_path)
+    if not new_members:
+        return {"members": [], "count": 0, "warnings": [], "errors": ["Tidak ada data anggota di file sumber."]}
+
+    # Step 2: Assign ID & simpan ke anggota.xlsx
+    members_with_id, warnings = assign_barcode_ids(
+        new_members,
+        year=year,
+        id_column=id_column,
+    )
+
+    if not members_with_id:
+        return {
+            "members": [], "count": 0,
+            "warnings": warnings,
+            "errors": ["Tidak ada anggota yang valid untuk diproses."],
+        }
+
+    save_to_member_excel(members_with_id)
+
+    # Step 3: Generate barcode images
+    def prog_barcode(cur, tot):
+        if on_progress:
+            on_progress("barcode", cur, tot)
+
+    barcode_paths = generate_barcode_images(members_with_id, on_progress=prog_barcode)
+
+    # Step 4: Generate .docx
+    def prog_docx(cur, tot):
+        if on_progress:
+            on_progress("docx", cur, tot)
+
+    docx_path = generate_cards_docx(
+        members_with_id,
+        barcode_paths,
+        school_name=school_name,
+        on_progress=prog_docx,
+    )
+
+    return {
+        "members":     members_with_id,
+        "docx_path":   docx_path,
+        "barcode_dir": BARCODE_DIR,
+        "count":       len(members_with_id),
+        "warnings":    warnings,
+        "errors":      errors,
+    }
