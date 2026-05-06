@@ -41,6 +41,8 @@ from database.sqlite_db import (
     get_today_visitors,
     get_visit_count_today,
 )
+from gui.book_tab import BookTab
+
 from database.excel_reader import (
     load_members,
     find_by_barcode,
@@ -125,6 +127,10 @@ class MainWindow(QMainWindow):
         # Tab 3: Analisis
         self._tab_analytics = AnalyticsTab()
         self._tabs.addTab(self._tab_analytics, "📊  Analisis")
+
+        # Tab 4: Buku
+        self.book_tab = BookTab()
+        self.tabs.addTab(self.book_tab, "📘  Buku")
 
         root.addWidget(self._tabs, stretch=1)
 

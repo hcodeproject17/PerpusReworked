@@ -43,6 +43,8 @@ def init_db() -> None:
         with _get_connection() as conn:
             conn.executescript(ddl)
         logger.info("Database diinisialisasi.")
+        from database.book_db import init_book_db  # ← tambahkan
+        init_book_db()
     except sqlite3.Error as exc:
         logger.error("Gagal inisialisasi database: %s", exc)
         raise
