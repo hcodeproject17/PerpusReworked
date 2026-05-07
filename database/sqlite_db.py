@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Optional
 
 from config import DATABASE_PATH
+from database.loan_db import init_loan_db
+
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,7 @@ def init_db() -> None:
         logger.error("Gagal inisialisasi database: %s", exc)
         raise
 
+init_loan_db()
 
 def check_visitor_today(barcode_id: str) -> bool:
     """

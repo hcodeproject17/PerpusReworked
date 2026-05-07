@@ -19,7 +19,7 @@ from config import APP_NAME, DATA_DIR
 from database.sqlite_db import init_db
 from database.excel_reader import load_members, backup_excel
 
-# Setup logging with file handler
+# Setup logging with file handler 
 LOG_DIR = DATA_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 

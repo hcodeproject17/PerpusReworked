@@ -52,6 +52,7 @@ from database.excel_reader import (
 )
 from gui.card_tab import CardTab
 from gui.analytics_tab import AnalyticsTab
+from gui.loan_tab import LoanTab
 from theme import log_colors as _log_colors
 from config import (
     APP_NAME,
@@ -131,6 +132,10 @@ class MainWindow(QMainWindow):
         # Tab 4: Buku
         self._book_tab = BookTab()
         self._tabs.addTab(self._book_tab, "📘  Buku")
+
+        # tab 5: Peminjaman
+        self._loan_tab = LoanTab()
+        self._tabs.addTab(self._loan_tab, "📖  Peminjaman")
 
         root.addWidget(self._tabs, stretch=1)
 
