@@ -15,10 +15,14 @@ Fitur:
 from __future__ import annotations
 
 import logging
+import os
+import sys
+import subprocess
 from typing import Optional
 
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtGui import QFont
+from create_book_template import generate_excel_template
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView,
@@ -309,12 +313,14 @@ class BookTab(QWidget):
 
         # Tombol aksi
         btn_add    = QPushButton("＋  Tambah Buku")
+        btn_template = QPushButton("📄 Buat Template")
         btn_import = QPushButton("📥  Import Excel")
         btn_edit   = QPushButton("✏️  Edit")
         btn_delete = QPushButton("🗑  Hapus")
         btn_refresh = QPushButton("↺  Refresh")
 
         btn_add.setObjectName("btnPrimary")
+        btn_template.setObjectName("btnSecondary")
         btn_import.setObjectName("btnSecondary")
         btn_edit.setObjectName("btnSecondary")
         btn_delete.setObjectName("btnCancel")
@@ -322,6 +328,7 @@ class BookTab(QWidget):
 
         for btn, cb in [
             (btn_add,    self._on_add),
+            (btn_template, self._on_create_template),
             (btn_import, self._on_import),
             (btn_edit,   self._on_edit),
             (btn_delete, self._on_delete),
@@ -333,6 +340,7 @@ class BookTab(QWidget):
         tb_layout.addWidget(self.cmb_kategori)
         tb_layout.addStretch()
         tb_layout.addWidget(btn_refresh)
+        tb_layout.addWidget(btn_template)
         tb_layout.addWidget(btn_import)
         tb_layout.addWidget(btn_edit)
         tb_layout.addWidget(btn_delete)
@@ -534,6 +542,57 @@ class BookTab(QWidget):
             self.lbl_status.setText(f"✔ Buku '{book['kode_buku']}' dihapus.")
         else:
             QMessageBox.critical(self, "Gagal", msg)
+
+    def _on_create_template(self):
+        # Minta user memilih lokasi dan nama file untuk disave
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Simpan Template Excel",
+            "template_import_buku.xlsx",
+            "Excel Files (*.xlsx)"
+        )
+
+        if not path:
+            return # Dibatalkan oleh user
+
+        self.lbl_status.setText("Membuat template excel...")
+
+        # Panggil fungsi generate
+        ok, err = generate_excel_template(path)
+
+        if ok:
+            self.lbl_status.setText("✔ Template Excel berhasil dibuat.")
+
+            # Tampilkan pesan sukses dan tanyakan apakah ingin membuka lokasi file
+            reply = QMessageBox.information(
+                self,
+                "Berhasil",
+                f"Template berhasil disimpan di:\n{path}\n\nApakah Anda ingin membuka lokasi file ini?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self._reveal_in_explorer(path)
+        else:
+            QMessageBox.critical(self, "Gagal", f"Terjadi kesalahan saat menyimpan template:\n{err}")
+            self.lbl_status.setText("✘ Gagal membuat template.")
+
+    def _reveal_in_explorer(self, path: str):
+        """Fungsi helper untuk membuka File Explorer / Finder"""
+        try:
+            if sys.platform == "win32":
+                # Windows: Buka explorer dan otomatis pilih filenya
+                path = os.path.normpath(path)
+                subprocess.Popen(f'explorer /select,"{path}"')
+            elif sys.platform == "darwin":
+                # macOS: Buka Finder dan otomatis pilih filenya
+                subprocess.Popen(["open", "-R", path])
+            else:
+                # Linux: Buka folder tempat file tersebut berada
+                folder_path = os.path.dirname(path)
+                subprocess.Popen(["xdg-open", folder_path])
+        except Exception as e:
+            logger.error(f"Gagal membuka explorer: {e}")
+            self.lbl_status.setText("✘ Gagal membuka File Explorer.")
 
     def _on_import(self):
         path, _ = QFileDialog.getOpenFileName(

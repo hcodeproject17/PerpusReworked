@@ -129,8 +129,8 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._tab_analytics, "📊  Analisis")
 
         # Tab 4: Buku
-        self.book_tab = BookTab()
-        self.tabs.addTab(self.book_tab, "📘  Buku")
+        self._book_tab = BookTab()
+        self._tabs.addTab(self._book_tab, "📘  Buku")
 
         root.addWidget(self._tabs, stretch=1)
 
