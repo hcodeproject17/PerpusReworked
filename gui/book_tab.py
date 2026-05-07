@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 from database.book_db import (
     get_all_books, search_books, add_book, update_book, delete_book,
     get_categories, get_book_stats, import_books_from_excel,
-    generate_kode_buku,
+    generate_kode_buku, delete_books_bulk
 )
 
 logger = logging.getLogger(__name__)
@@ -518,30 +518,52 @@ class BookTab(QWidget):
             self.lbl_status.setText(f"✔ Buku '{book['kode_buku']}' berhasil diperbarui.")
 
     def _on_delete(self):
-        book = self._selected_book()
-        if not book:
-            QMessageBox.information(self, "Hapus Buku", "Pilih buku yang ingin dihapus terlebih dahulu.")
+        # 1. Ambil semua item yang sedang dipilih
+        selected_items = self.table.selectedItems()
+
+        if not selected_items:
+            QMessageBox.warning(self, "Peringatan", "Pilih minimal satu buku yang ingin dihapus.")
             return
+
+        # 2. Cari baris (row) unik yang dipilih
+        # (Karena jika 1 baris dipilih, semua sel di baris itu ikut terpilih, kita gunakan set() agar tidak duplikat)
+        selected_rows = set(item.row() for item in selected_items)
+
+        # 3. Kumpulkan kode_buku dari setiap baris
+        kodes_to_delete = []
+        for row in selected_rows:
+            # Asumsi "Kode Buku" berada di kolom indeks 0
+            kode_item = self.table.item(row, 0)
+            if kode_item:
+                kodes_to_delete.append(kode_item.text())
+
+        jumlah = len(kodes_to_delete)
+        if jumlah == 0:
+            return
+
+        # 4. Tampilkan dialog konfirmasi
+        pesan_konfirmasi = f"Apakah Anda yakin ingin menghapus {jumlah} buku yang dipilih?\n\nTindakan ini tidak dapat dibatalkan."
 
         reply = QMessageBox.question(
             self,
-            "Konfirmasi Hapus",
-            f"Hapus buku berikut?\n\n"
-            f"Kode : {book['kode_buku']}\n"
-            f"Judul: {book['judul']}\n\n"
-            "Tindakan ini tidak dapat dibatalkan.",
+            "Konfirmasi Hapus Massal",
+            pesan_konfirmasi,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
         )
+
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        ok, msg = delete_book(book["kode_buku"])
+        # 5. Eksekusi penghapusan massal
+        ok, msg = delete_books_bulk(kodes_to_delete)
+
         if ok:
-            self._do_load()
-            self.lbl_status.setText(f"✔ Buku '{book['kode_buku']}' dihapus.")
+            self._do_load()  # Refresh tabel
+            self.lbl_status.setText(f"✔ {jumlah} buku berhasil dihapus.")
+            QMessageBox.information(self, "Berhasil", f"{jumlah} data buku telah dihapus dari sistem.")
         else:
-            QMessageBox.critical(self, "Gagal", msg)
+            QMessageBox.critical(self, "Gagal", f"Gagal menghapus data:\n{msg}")
 
     def _on_create_template(self):
         # Minta user memilih lokasi dan nama file untuk disave

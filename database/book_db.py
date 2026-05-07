@@ -169,6 +169,26 @@ def delete_book(kode_buku: str) -> tuple[bool, str]:
         logger.error("Gagal hapus buku: %s", exc)
         return False, str(exc)
 
+def delete_books_bulk(kodes: list[str]) -> tuple[bool, str]:
+    """
+    Menghapus banyak buku sekaligus berdasarkan daftar kode buku.
+    Return: (success_boolean, error_message)
+    """
+    if not kodes:
+        return True, "Tidak ada buku yang dipilih."
+
+    # Buat placeholder '? , ? , ?' sesuai dengan jumlah data di list 'kodes'
+    placeholders = ",".join("?" for _ in kodes)
+    sql = f"DELETE FROM buku WHERE kode_buku IN ({placeholders})"
+
+    try:
+        with _get_connection() as conn:
+            conn.execute(sql, kodes)
+        logger.info("Berhasil menghapus %d buku massal.", len(kodes))
+        return True, ""
+    except sqlite3.Error as exc:
+        logger.error("Gagal menghapus buku massal: %s", exc)
+        return False, f"Error database: {exc}"
 
 # ── Query ─────────────────────────────────────────────────────────────────────
 
