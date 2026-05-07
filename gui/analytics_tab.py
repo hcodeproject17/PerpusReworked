@@ -1043,7 +1043,7 @@ class AnalyticsTab(QWidget):
 
             /* Section labels */
             QLabel#analyticsSectionLabel {{
-                font-size: 10px;
+                font-size: 13px;
                 font-weight: 700;
                 color: {P2};
                 letter-spacing: 1.2px;

@@ -719,7 +719,7 @@ QScrollArea#analyticsScroll {{
     border: none;
 }}
 QWidget#analyticsCard {{
-    background-color: {SRF};
+    background-color: transparent;
     border: 1px solid {BRD};
     border-radius: 8px;
 }}
@@ -783,7 +783,7 @@ QTableWidget#analyticsTable::item:selected {{ background-color: {P4}; color: {TP
 QLabel#analyticsInfo {{
     background-color: transparent;
     color: {P2};
-    font-size: 11px;
+    font-size: 13px;
     line-height: 150%;
 }}
 QLabel#analyticsCountLabel {{

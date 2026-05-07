@@ -170,7 +170,7 @@ class CardTab(QWidget):
         row.addWidget(btn_browse)
         v.addLayout(row)
 
-        self._btn_preview = QPushButton("👁  Preview Data")
+        self._btn_preview = QPushButton("Preview Data")
         self._btn_preview.setObjectName("btnPreview")
         self._btn_preview.setEnabled(False)
         self._btn_preview.clicked.connect(self._load_preview)
