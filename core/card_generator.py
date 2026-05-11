@@ -52,9 +52,9 @@ CARDS_PER_ROW  = 2   # 2 kartu per baris di halaman A4
 # Fungsi utilitas
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _ensure_dirs() -> None:
-    BARCODE_DIR.mkdir(parents=True, exist_ok=True)
-    CARDS_DIR.mkdir(parents=True, exist_ok=True)
+def _ensure_dirs(barcode_dir: Path, cards_dir: Path) -> None:
+    barcode_dir.mkdir(parents=True, exist_ok=True)
+    cards_dir.mkdir(parents=True, exist_ok=True)
 
 
 def _get_next_barcode_id(existing_ids: list[str], year: int) -> str:
@@ -284,6 +284,7 @@ def save_to_member_excel(members_with_id: list[dict]) -> int:
 
 def generate_barcode_images(
     members_with_id: list[dict],
+    barcode_dir: Optional[Path] = None,
     on_progress=None,
 ) -> dict[str, Path]:
     """
@@ -291,19 +292,23 @@ def generate_barcode_images(
 
     Args:
         members_with_id : list hasil assign_barcode_ids()
+        barcode_dir     : folder output untuk gambar barcode (default: BARCODE_DIR)
         on_progress     : callback(current, total) untuk progress bar GUI
 
     Returns:
         dict barcode_id → Path file PNG
     """
-    _ensure_dirs()
+    if barcode_dir is None:
+        barcode_dir = BARCODE_DIR
+    
+    _ensure_dirs(barcode_dir, CARDS_DIR)
     results: dict[str, Path] = {}
     total = len(members_with_id)
 
     for idx, member in enumerate(members_with_id):
         barcode_id = member[EXCEL_COL_BARCODE]
         safe_name  = barcode_id.replace("/", "-").replace("\\", "-")
-        out_path   = BARCODE_DIR / f"{safe_name}.png"
+        out_path   = barcode_dir / f"{safe_name}.png"
 
         try:
             # Generate barcode ke bytes buffer
@@ -576,6 +581,7 @@ def generate_cards_docx(
     barcode_paths: dict[str, Path],
     school_name: str = "SMA Negeri 1",
     cards_per_row: int = CARDS_PER_ROW,
+    cards_dir: Optional[Path] = None,
     on_progress=None,
 ) -> Path:
     """
@@ -587,12 +593,16 @@ def generate_cards_docx(
         barcode_paths   : dict dari generate_barcode_images()
         school_name     : nama sekolah untuk header kartu
         cards_per_row   : jumlah kartu per baris (default 2)
+        cards_dir       : folder output untuk file .docx (default: CARDS_DIR)
         on_progress     : callback(current, total)
 
     Returns:
         Path file .docx yang dihasilkan
     """
-    _ensure_dirs()
+    if cards_dir is None:
+        cards_dir = CARDS_DIR
+    
+    _ensure_dirs(BARCODE_DIR, cards_dir)
 
     doc = Document()
 
@@ -637,7 +647,7 @@ def generate_cards_docx(
 
     # ── Simpan ────────────────────────────────────────────────────────────────
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_path  = CARDS_DIR / f"kartu_perpustakaan_{timestamp}.docx"
+    out_path  = cards_dir / f"kartu_perpustakaan_{timestamp}.docx"
     doc.save(str(out_path))
     logger.info("Dokumen kartu berhasil dibuat: %s", out_path.name)
     return out_path
@@ -652,6 +662,7 @@ def run_card_generation(
     school_name: str,
     year: Optional[int] = None,
     id_column: Optional[str] = None,
+    output_dir: Optional[str | Path] = None,
     on_progress=None,
 ) -> dict:
     """
@@ -662,6 +673,7 @@ def run_card_generation(
         school_name       : nama sekolah untuk header kartu
         year              : tahun ID (hanya untuk mode generate otomatis)
         id_column         : kolom kustom sebagai ID barcode (None = generate otomatis)
+        output_dir        : folder output kustom untuk barcode dan docx (default: assets/)
         on_progress       : callback(stage, current, total)
 
     Returns dict dengan key:
@@ -672,6 +684,14 @@ def run_card_generation(
         'warnings'    : list[str] baris yang dilewati
         'errors'      : list[str] error fatal
     """
+    # Setup output directories
+    if output_dir is None:
+        barcode_dir = BARCODE_DIR
+        cards_dir = CARDS_DIR
+    else:
+        output_dir = Path(output_dir)
+        barcode_dir = output_dir / "barcode_images"
+        cards_dir = output_dir / "kartu_output"
     errors   = []
     warnings = []
 
@@ -701,7 +721,7 @@ def run_card_generation(
         if on_progress:
             on_progress("barcode", cur, tot)
 
-    barcode_paths = generate_barcode_images(members_with_id, on_progress=prog_barcode)
+    barcode_paths = generate_barcode_images(members_with_id, barcode_dir=barcode_dir, on_progress=prog_barcode)
 
     # Step 4: Generate .docx
     def prog_docx(cur, tot):
@@ -712,13 +732,14 @@ def run_card_generation(
         members_with_id,
         barcode_paths,
         school_name=school_name,
+        cards_dir=cards_dir,
         on_progress=prog_docx,
     )
 
     return {
         "members":     members_with_id,
         "docx_path":   docx_path,
-        "barcode_dir": BARCODE_DIR,
+        "barcode_dir": barcode_dir,
         "count":       len(members_with_id),
         "warnings":    warnings,
         "errors":      errors,
