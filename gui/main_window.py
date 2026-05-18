@@ -42,7 +42,7 @@ from database.sqlite_db import (
     get_visit_count_today,
 )
 from gui.book_tab import BookTab
-
+from gui.book_barcode_tab import BookBarcodeTab
 from database.excel_reader import (
     load_members,
     find_by_barcode,
@@ -123,17 +123,21 @@ class MainWindow(QMainWindow):
 
         # Tab 2: Kartu Massal
         self._tab_card = CardTab()
-        self._tabs.addTab(self._tab_card, "📇  Kartu Massal")
+        self._tabs.addTab(self._tab_card, "📇  Cetak Kartu")
+        
+        # Tab 3: Barcode Buku
+        self._book_barcode_tab = BookBarcodeTab()
+        self._tabs.addTab(self._book_barcode_tab, "🏷  Barcode Buku")
 
-        # Tab 3: Analisis
+        # Tab 4: Analisis
         self._tab_analytics = AnalyticsTab()
         self._tabs.addTab(self._tab_analytics, "📊  Analisis")
 
-        # Tab 4: Buku
+        # Tab 5: Buku
         self._book_tab = BookTab()
         self._tabs.addTab(self._book_tab, "📘  Buku")
 
-        # tab 5: Peminjaman
+        # Tab 6: Peminjaman
         self._loan_tab = LoanTab()
         self._tabs.addTab(self._loan_tab, "📖  Peminjaman")
 
