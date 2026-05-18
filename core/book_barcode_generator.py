@@ -107,8 +107,8 @@ def fetch_books(
     Returns:
         list[dict] dengan key: kode_buku, judul, pengarang, kategori
     """
-    from database.book_db import get_db_connection
-    conn = get_db_connection()
+    from database.book_db import _get_connection
+    conn = _get_connection()
     try:
         conditions = []
         params     = []
@@ -143,8 +143,8 @@ def fetch_books(
 
 def fetch_all_categories() -> list[str]:
     """Ambil daftar kategori unik dari tabel buku."""
-    from database.book_db import get_db_connection
-    conn = get_db_connection()
+    from database.book_db import _get_connection
+    conn = _get_connection()
     try:
         rows = conn.execute(
             "SELECT DISTINCT kategori FROM buku WHERE kategori IS NOT NULL AND kategori != '' ORDER BY kategori"

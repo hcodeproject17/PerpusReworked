@@ -113,10 +113,28 @@ def add_book(data: dict) -> tuple[bool, str]:
 def update_book(kode_buku: str, data: dict) -> tuple[bool, str]:
     """
     Update data buku berdasarkan kode_buku.
-    Tidak mengubah jumlah_tersedia (dikelola oleh modul peminjaman).
+    Menyesuaikan jumlah_tersedia jika jumlah_eksemplar diubah.
     """
     kode = kode_buku.strip().upper()
-    jml  = max(1, int(data.get("jumlah_eksemplar", 1)))
+    jml_baru = max(1, int(data.get("jumlah_eksemplar", 1)))
+
+    # 1. Ambil data buku lama untuk menghitung selisih eksemplar
+    buku_lama = get_book_by_kode(kode)
+    if not buku_lama:
+        return False, f"Buku dengan kode '{kode}' tidak ditemukan."
+
+    eksemplar_lama = buku_lama["jumlah_eksemplar"]
+    tersedia_lama = buku_lama["jumlah_tersedia"]
+
+    # 2. Hitung jumlah tersedia yang baru
+    selisih = jml_baru - eksemplar_lama
+    tersedia_baru = tersedia_lama + selisih
+
+    # 3. Validasi: Jangan izinkan pengurangan eksemplar jika stok tersedia minus
+    # (artinya user mencoba menghapus buku yang sedang dipinjam oleh siswa)
+    if tersedia_baru < 0:
+        dipinjam = eksemplar_lama - tersedia_lama
+        return False, f"Gagal: Ada {dipinjam} buku yang sedang dipinjam. Jumlah eksemplar minimal adalah {dipinjam}."
 
     sql = """
     UPDATE buku SET
@@ -127,6 +145,7 @@ def update_book(kode_buku: str, data: dict) -> tuple[bool, str]:
         penerbit         = ?,
         tahun_terbit     = ?,
         jumlah_eksemplar = ?,
+        jumlah_tersedia  = ?,
         lokasi_rak       = ?,
         keterangan       = ?
     WHERE kode_buku = ?
@@ -138,11 +157,13 @@ def update_book(kode_buku: str, data: dict) -> tuple[bool, str]:
         data.get("kategori", "").strip(),
         data.get("penerbit", "").strip(),
         data.get("tahun_terbit", "").strip(),
-        jml,
+        jml_baru,
+        tersedia_baru,
         data.get("lokasi_rak", "").strip(),
         data.get("keterangan", "").strip(),
         kode,
     )
+
     try:
         with _get_connection() as conn:
             cur = conn.execute(sql, params)
@@ -153,7 +174,6 @@ def update_book(kode_buku: str, data: dict) -> tuple[bool, str]:
     except sqlite3.Error as exc:
         logger.error("Gagal update buku: %s", exc)
         return False, str(exc)
-
 
 def delete_book(kode_buku: str) -> tuple[bool, str]:
     """Hapus buku berdasarkan kode_buku."""
