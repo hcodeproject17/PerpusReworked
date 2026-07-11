@@ -47,6 +47,8 @@ def init_db() -> None:
         logger.info("Database diinisialisasi.")
         from database.book_db import init_book_db  # ← tambahkan
         init_book_db()
+        from database.settings_db import init_settings_db
+        init_settings_db()
     except sqlite3.Error as exc:
         logger.error("Gagal inisialisasi database: %s", exc)
         raise

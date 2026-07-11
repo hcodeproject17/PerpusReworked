@@ -35,8 +35,8 @@ from database.loan_db import (
     borrow_book, return_book,
     get_active_loans, get_overdue_loans,
     search_loans, get_loan_by_id, get_loan_stats,
-    DENDA_PER_HARI, DURASI_PINJAM, MAX_PINJAM,
 )
+from database.settings_db import get_denda_per_hari, get_durasi_pinjam
 from database.book_db import get_book_by_kode, search_books
 from database.excel_reader import find_by_barcode, search as search_members
 from theme import get_palette
@@ -295,7 +295,7 @@ class PinjamPanel(QWidget):
         self._spn_durasi = QSpinBox()
         self._spn_durasi.setObjectName("configInput")
         self._spn_durasi.setRange(1, 60)
-        self._spn_durasi.setValue(DURASI_PINJAM)
+        self._spn_durasi.setValue(get_durasi_pinjam())
         self._spn_durasi.setSuffix(" hari")
         self._spn_durasi.setMaximumWidth(120)
         cv.addRow("Durasi :", self._spn_durasi)
@@ -563,7 +563,7 @@ class KembalikanPanel(QWidget):
         today = date.today()
         due   = date.fromisoformat(self._loan["tanggal_kembali_rencana"])
         terlambat = max(0, (today - due).days)
-        denda     = terlambat * DENDA_PER_HARI
+        denda     = terlambat * get_denda_per_hari()
 
         detail_lines = [
             f"<b>ID Transaksi :</b> #{self._loan['id']}",
@@ -593,7 +593,7 @@ class KembalikanPanel(QWidget):
         today = date.today()
         due   = date.fromisoformat(self._loan["tanggal_kembali_rencana"])
         terlambat = max(0, (today - due).days)
-        denda     = terlambat * DENDA_PER_HARI
+        denda     = terlambat * get_denda_per_hari()
 
         pesan_konfirm = (
             f"Konfirmasi pengembalian buku:\n\n"
@@ -655,7 +655,7 @@ class AktifPanel(QWidget):
 
         info = QLabel(
             "Baris merah = sudah melewati tanggal jatuh tempo.\n"
-            f"Denda: Rp {DENDA_PER_HARI:,} per hari keterlambatan."
+            f"Denda: Rp {get_denda_per_hari():,} per hari keterlambatan."
         )
         info.setObjectName("analyticsInfo")
         root.addWidget(info)
@@ -688,7 +688,7 @@ class AktifPanel(QWidget):
         for row, loan in enumerate(loans):
             due = date.fromisoformat(loan["tanggal_kembali_rencana"])
             terlambat = max(0, (today - due).days)
-            ket = f"⚠ {terlambat} hari (Rp {terlambat*DENDA_PER_HARI:,})" if terlambat > 0 else "✓ Tepat waktu"
+            ket = f"⚠ {terlambat} hari (Rp {terlambat*get_denda_per_hari():,})" if terlambat > 0 else "✓ Tepat waktu"
             color = overdue_color if terlambat > 0 else None
 
             _set_row(self._tbl, row, [

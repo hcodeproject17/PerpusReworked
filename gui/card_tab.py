@@ -53,6 +53,7 @@ from PySide6.QtWidgets import (
 )
 
 from theme import log_colors as _log_colors
+from database.settings_db import get_nama_sekolah
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +208,7 @@ class CardTab(QWidget):
         v.setSpacing(8)
 
         v.addWidget(self._field_label("Nama Sekolah / Instansi:"))
-        self._input_school = QLineEdit("MTs Negeri 12 Cirebon")
+        self._input_school = QLineEdit(get_nama_sekolah())
         self._input_school.setObjectName("configInput")
         v.addWidget(self._input_school)
 

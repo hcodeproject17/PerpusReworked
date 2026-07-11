@@ -1,6 +1,8 @@
 """
 gui/main_window.py — Dashboard utama PerpusReworked
-Layout: QTabWidget dengan Tab Pengunjung + Tab Kartu Massal
+Layout: sidebar navigasi persisten (kiri) + QStackedWidget konten (kanan),
+menggantikan tab horizontal lama agar semua menu selalu terlihat sekaligus
+dan area kerja tabel data mendapat lebar maksimum.
 """
 
 import logging
@@ -12,7 +14,7 @@ import numpy as np
 
 from PySide6.QtCore import Signal as pyqtSignal
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QImage, QPixmap, QFont, QTextCursor
+from PySide6.QtGui import QImage, QPixmap, QFont, QTextCursor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -30,7 +32,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QListWidget,
     QListWidgetItem,
-    QTabWidget,
+    QStackedWidget,
+    QButtonGroup,
     QFrame,
 )
 
@@ -53,6 +56,7 @@ from database.excel_reader import (
 from gui.card_tab import CardTab
 from gui.analytics_tab import AnalyticsTab
 from gui.loan_tab import LoanTab
+from gui.settings_dialog import SettingsDialog
 from theme import log_colors as _log_colors
 from config import (
     APP_NAME,
@@ -111,37 +115,44 @@ class MainWindow(QMainWindow):
         # ── Header ────────────────────────────────────────────────────────────
         root.addWidget(self._make_header())
 
-        # ── Tab widget ────────────────────────────────────────────────────────
-        self._tabs = QTabWidget()
-        self._tabs.setObjectName("mainTabs")
-        self._tabs.setDocumentMode(True)
+        # ── Baris kerja: sidebar navigasi + area konten ─────────────────────────
+        work_row = QHBoxLayout()
+        work_row.setContentsMargins(0, 0, 0, 0)
+        work_row.setSpacing(0)
 
-        # Tab 1: Pengunjung
+        work_row.addWidget(self._make_sidebar())
+
+        self._stack = QStackedWidget()
+        self._stack.setObjectName("mainStack")
+
+        # Halaman 1: Pengunjung
         self._tab_visitor = QWidget()
         self._build_visitor_tab(self._tab_visitor)
-        self._tabs.addTab(self._tab_visitor, "📷  Kunjungan")
+        self._stack.addWidget(self._tab_visitor)
 
-        # Tab 2: Kartu Massal
+        # Halaman 2: Kartu Massal
         self._tab_card = CardTab()
-        self._tabs.addTab(self._tab_card, "📇  Cetak Kartu")
-        
-        # Tab 3: Barcode Buku
+        self._stack.addWidget(self._tab_card)
+
+        # Halaman 3: Barcode Buku
         self._book_barcode_tab = BookBarcodeTab()
-        self._tabs.addTab(self._book_barcode_tab, "🏷  Barcode Buku")
+        self._stack.addWidget(self._book_barcode_tab)
 
-        # Tab 4: Analisis
+        # Halaman 4: Analisis
         self._tab_analytics = AnalyticsTab()
-        self._tabs.addTab(self._tab_analytics, "📊  Analisis")
+        self._stack.addWidget(self._tab_analytics)
 
-        # Tab 5: Buku
+        # Halaman 5: Buku
         self._book_tab = BookTab()
-        self._tabs.addTab(self._book_tab, "📘  Buku")
+        self._stack.addWidget(self._book_tab)
 
-        # Tab 6: Peminjaman
+        # Halaman 6: Peminjaman
         self._loan_tab = LoanTab()
-        self._tabs.addTab(self._loan_tab, "📖  Peminjaman")
+        self._stack.addWidget(self._loan_tab)
 
-        root.addWidget(self._tabs, stretch=1)
+        work_row.addWidget(self._stack, stretch=1)
+
+        root.addLayout(work_row, stretch=1)
 
         # ── Status bar ────────────────────────────────────────────────────────
         self._lbl_status = QLabel("Siap")
@@ -153,6 +164,85 @@ class MainWindow(QMainWindow):
         self._lbl_kunjungan.setObjectName("statusBarLabel")
         self.statusBar().addPermanentWidget(self._lbl_kunjungan)
 
+    # ── Sidebar navigasi ─────────────────────────────────────────────────────
+
+    # (ikon, label, shortcut Ctrl+N) — urutan sama dengan urutan halaman di atas
+    _NAV_ITEMS = [
+        ("📷", "Kunjungan",     "1"),
+        ("📇", "Cetak Kartu",   "2"),
+        ("🏷",  "Barcode Buku", "3"),
+        ("📊", "Analisis",      "4"),
+        ("📘", "Buku",          "5"),
+        ("📖", "Peminjaman",    "6"),
+    ]
+
+    def _make_sidebar(self) -> QWidget:
+        sidebar = QWidget()
+        sidebar.setObjectName("navSidebar")
+        sidebar.setFixedWidth(196)
+        v = QVBoxLayout(sidebar)
+        v.setContentsMargins(12, 16, 12, 12)
+        v.setSpacing(4)
+
+        brand = QLabel(f"📚  {APP_NAME}")
+        brand.setObjectName("navBrand")
+        brand.setWordWrap(True)
+        v.addWidget(brand)
+
+        sub = QLabel(f"v{APP_VERSION}")
+        sub.setObjectName("navBrandSub")
+        v.addWidget(sub)
+
+        v.addSpacing(6)
+        divider = QFrame()
+        divider.setObjectName("navDivider")
+        divider.setFixedHeight(1)
+        v.addWidget(divider)
+        v.addSpacing(6)
+
+        self._nav_group = QButtonGroup(self)
+        self._nav_group.setExclusive(True)
+        self._nav_buttons: list[QPushButton] = []
+
+        for index, (icon, label, key) in enumerate(self._NAV_ITEMS):
+            btn = self._make_nav_button(icon, label, key, index)
+            v.addWidget(btn)
+            self._nav_group.addButton(btn, index)
+            self._nav_buttons.append(btn)
+
+            # Ctrl+1..6 — navigasi cepat via keyboard tanpa menyentuh mouse
+            shortcut = QShortcut(QKeySequence(f"Ctrl+{key}"), self)
+            shortcut.activated.connect(lambda i=index: self._go_to_page(i))
+
+        self._nav_buttons[0].setChecked(True)
+
+        v.addStretch()
+
+        btn_settings = QPushButton("⚙  Pengaturan")
+        btn_settings.setObjectName("navSettingsBtn")
+        btn_settings.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_settings.clicked.connect(self._open_settings_dialog)
+        v.addWidget(btn_settings)
+
+        return sidebar
+
+    def _make_nav_button(self, icon: str, label: str, shortcut_key: str, index: int) -> QPushButton:
+        btn = QPushButton(f"{icon}   {label}")
+        btn.setObjectName("navItem")
+        btn.setCheckable(True)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.clicked.connect(lambda: self._go_to_page(index))
+        return btn
+
+    def _go_to_page(self, index: int) -> None:
+        self._stack.setCurrentIndex(index)
+        self._nav_buttons[index].setChecked(True)
+        self._lbl_section_title.setText(self._NAV_ITEMS[index][1])
+
+    def _open_settings_dialog(self) -> None:
+        dialog = SettingsDialog(self)
+        dialog.exec()
+
     # ── Header ────────────────────────────────────────────────────────────────
 
     def _make_header(self) -> QWidget:
@@ -162,9 +252,9 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout(header)
         layout.setContentsMargins(20, 0, 20, 0)
 
-        lbl_title = QLabel(f"📚  {APP_NAME}")
-        lbl_title.setObjectName("headerTitle")
-        layout.addWidget(lbl_title)
+        self._lbl_section_title = QLabel(self._NAV_ITEMS[0][1])
+        self._lbl_section_title.setObjectName("headerTitle")
+        layout.addWidget(self._lbl_section_title)
 
         layout.addStretch()
 

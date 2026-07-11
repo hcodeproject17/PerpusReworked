@@ -87,7 +87,7 @@ DARK_ORIGINAL = Palette(
 
     text_primary   = "e2e4ed",
     text_secondary = "8892aa",
-    text_on_dark   = "ffffff",
+    text_on_dark   = "0d0f14",   # navi gelap — putih di atas P1 (biru terang) hanya 2.82:1 (gagal AA), navi gelap capai 6.8:1
 
     bg      = "13161e",
     surface = "181b24",
@@ -110,7 +110,7 @@ WHITE_FOREST = Palette(
 
     # Teks
     text_primary   = "132A1A",   # hijau sangat gelap
-    text_secondary = "3C9054",   # hijau tua (sama dengan p1)
+    text_secondary = "2D6C3F",   # diperdalam dari 3C9054 (3.58:1 gagal AA) → 5.71:1 lolos AA
     text_on_dark   = "FFFFFF",   # putih untuk teks di atas p1
 
     # Surface
@@ -149,18 +149,121 @@ EARTHSTONE = Palette(
     log_info    = "8FA87C",
 )
 
+TERRACOTTA = Palette(
+    p1 = "7A3E31",  # Deep rust / Bata gelap
+    p2 = "A35E4E",  # Muted terracotta / Tanah liat
+    p3 = "C88D7D",  # Soft clay / Persik redup
+    p4 = "E0B986",  # Warm ochre / Pasir hangat
+
+    text_primary   = "2E1813",  # Cokelat kehitaman (sangat gelap)
+    text_secondary = "7A3E31",  # Sama dengan p1
+    text_on_dark   = "FDF9F3",  # Krem putih hangat
+
+    bg      = "F6EFEA",  # Abu-abu krem sangat terang
+    surface = "EADED5",  # Krem tanah (sedikit lebih gelap dari bg)
+    border  = "CDB6A6",  # Cokelat redup pucat
+
+    log_bg      = "241512",  # Kopi gelap / Espresso
+    log_text    = "C88D7D",  # Sama dengan p3
+    log_success = "A4C982",  # Hijau redup (menjaga konsistensi alam)
+    log_warning = "F2BE74",  # Kuning senja
+    log_error   = "E37669",  # Merah bata lembut
+    log_info    = "C88D7D",
+)
+
+RIVERSTONE = Palette(
+    p1 = "3A4E5E",  # Deep slate blue / Biru batu gelap
+    p2 = "58717F",  # Muted steel blue / Biru keabu-abuan
+    p3 = "7C96A8",  # Soft grayish blue / Biru kabut
+    p4 = "BFCBCE",  # Pale river sand / Abu-abu pucat
+
+    text_primary   = "151C22",  # Biru dongker kehitaman
+    text_secondary = "3A4E5E",  # Sama dengan p1
+    text_on_dark   = "EEF3F9",  # Putih kebiruan bersih
+
+    bg      = "E7EDF2",  # Abu-abu kebiruan sangat terang
+    surface = "D8E2E8",  # Abu-abu batu muda
+    border  = "A6B8C7",  # Biru pudar untuk garis batas
+
+    log_bg      = "141A22",  # Biru malam sangat gelap
+    log_text    = "7C96A8",  # Sama dengan p3
+    log_success = "8DC4A7",  # Hijau air / Seafoam redup
+    log_warning = "DFCA73",  # Kuning pasir redup
+    log_error   = "D97B7B",  # Merah karang redup
+    log_info    = "7C96A8",
+)
+
+MONDAY_LIGHT = Palette(
+    p1 = "0073EA",  # Signature Monday Blue (Aksen utama)
+    p2 = "3B90FF",  # Bright Blue (Hover / Aksen sekunder)
+    p3 = "74AFFF",  # Soft Blue
+    p4 = "784BD1",  # Monday Purple (Variasi aksen)
+
+    text_primary   = "1C1F26",  # Charcoal gelap (sangat kontras & bersih)
+    text_secondary = "676879",  # Slate gray untuk teks pembantu/sub-judul
+    text_on_dark   = "FFFFFF",  # Teks putih jika di atas warna gelap
+
+    bg      = "F5F6F8",  # Latar belakang utama Monday.com (Abu-abu sangat terang)
+    surface = "FFFFFF",  # Latar belakang panel/tabel (Putih bersih)
+    border  = "D0D4DC",  # Garis pembatas khas Monday yang tegas tapi tipis
+
+    log_bg      = "1C1F26",  # Panel log dibuat gelap untuk kontras estetika
+    log_text    = "C5D9F1",
+    log_success = "00C875",  # Ikonik "Done" Green
+    log_warning = "FDAB3D",  # Ikonik "Working on it" Orange
+    log_error   = "E2445C",  # Ikonik "Stuck" Red
+    log_info    = "0073EA",
+)
+
+MONDAY_DARK = Palette(
+    p1 = "1F85FF",  # Electric Blue (Ditingkatkan kecerahannya untuk mode gelap)
+    p2 = "5C9DFF",  # Soft Electric Blue
+    p3 = "99C2FF",  # Muted Blue
+    p4 = "9B73E6",  # Muted Purple
+
+    text_primary   = "E1E6EB",  # Putih pudar agar nyaman dibaca lama
+    text_secondary = "A0A6B5",  # Abu-abu medium untuk teks sekunder
+    text_on_dark   = "FFFFFF",
+
+    bg      = "18191C",  # Khas Monday Night Mode (Sangat gelap & elegan)
+    surface = "292C33",  # Permukaan panel/tabel (Lebih terang dari bg)
+    border  = "3E424B",  # Garis pembatas gelap yang halus namun tetap terlihat
+
+    log_bg      = "0D0E11",  # Panel log super gelap
+    log_text    = "99C2FF",
+    log_success = "00E687",  # Hijau status (Lebih neon agar terbaca jelas)
+    log_warning = "FFBA53",  # Jingga status
+    log_error   = "FF5570",  # Merah status
+    log_info    = "1F85FF",
+)
 
 # ── Registri tema ─────────────────────────────────────────────────────────────
 _THEMES: dict[str, Palette] = {
     "sage_light":    SAGE_LIGHT,
     "dark_original": DARK_ORIGINAL,
-    "white_forest": WHITE_FOREST,
     "earthstone": EARTHSTONE,
+    "terracotta": TERRACOTTA,
+    "riverstone": RIVERSTONE,
+    "monday_light": MONDAY_LIGHT,
+    "monday_dark": MONDAY_DARK,
 }
 
 def get_palette() -> Palette:
-    """Kembalikan Palette yang sedang aktif."""
-    return _THEMES.get(ACTIVE_THEME, SAGE_LIGHT)
+    """
+    Kembalikan Palette yang sedang aktif.
+
+    Prioritas: nilai 'active_theme' di settings_db (diset lewat jendela
+    Pengaturan) → fallback ke konstanta ACTIVE_THEME di atas. Dibungkus
+    try/except karena stylesheet() dipanggil sebelum init_db() saat startup
+    (lihat main.py) — di titik itu tabel settings belum tentu ada.
+    """
+    theme_name = ACTIVE_THEME
+    try:
+        from database import settings_db
+        theme_name = settings_db.get_active_theme() or ACTIVE_THEME
+    except Exception:
+        pass
+    return _THEMES.get(theme_name, _THEMES.get(ACTIVE_THEME, SAGE_LIGHT))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -225,7 +328,7 @@ QTabWidget#mainTabs::pane {{
 }}
 QTabWidget#mainTabs > QTabBar::tab {{
     background-color: {SRF};
-    color: {P2};
+    color: {TS};
     margin-top: 1px;
     padding: 10px 24px;
     font-size: 13px;
@@ -249,7 +352,7 @@ QLabel#panelLabel {{
     font-size: 13px;
     font-weight: bold;
     margin: 4px 0px 0px 5px;
-    color: {P3};
+    color: {TS};
     letter-spacing: 1.1px;
 }}
 
@@ -258,10 +361,10 @@ QLabel#cameraDisplay {{
     background-color: transparent;
     border: 1px solid {BRD};
     border-radius: 8px;
-    color: {P3};
+    color: {TS};
     font-size: 13px;
 }}
-QLabel#camStatusStandby {{ color: {P3}; font-size: 11px; font-weight: 600; }}
+QLabel#camStatusStandby {{ color: {TS}; font-size: 11px; font-weight: 600; }}
 QLabel#camStatusActive  {{ color: {P1}; font-size: 11px; font-weight: 600; }}
 QLabel#camStatusError   {{ color: #C0392B; font-size: 11px; font-weight: 600; }}
 
@@ -291,7 +394,7 @@ QListWidget#searchResults {{
 }}
 QListWidget#searchResults::item:hover    {{ background-color: {P4}; color: {TP}; }}
 QListWidget#searchResults::item:selected {{ background-color: {P1}; color: {TOD}; }}
-QLabel#hintLabel {{ margin: 3px 5px; color: {P3}; font-size: 10px; font-style: italic; background-color: transparent; }}
+QLabel#hintLabel {{ margin: 3px 5px; color: {TS}; font-size: 10px; font-style: italic; background-color: transparent; }}
 
 /* ── Tabel pengunjung ────────────────────────────────────────────────────── */
 QTableWidget#visitorTable {{
@@ -303,6 +406,7 @@ QTableWidget#visitorTable {{
     font-size: 12px;
     alternate-background-color: {SRF};
 }}
+QTableWidget#visitorTable::item {{ padding: 6px 10px; }}
 QTableWidget#visitorTable QHeaderView::section {{
     background-color: {P1};
     color: {TOD};
@@ -311,7 +415,7 @@ QTableWidget#visitorTable QHeaderView::section {{
     letter-spacing: 1px;
     border: none;
     border-bottom: 1px solid {P2};
-    padding: 6px;
+    padding: 8px 10px;
 }}
 QTableWidget#visitorTable::item:selected {{ background-color: {P4}; color: {TP}; }}
 QLabel#countLabel {{ font-size: 12px; color: {P1}; font-weight: 600; background-color: transparent; }}
@@ -376,7 +480,7 @@ QGroupBox#cardGroup {{
     padding: 10px;
     font-size: 10px;
     font-weight: 700;
-    color: {P2};
+    color: {TS};
     letter-spacing: 1.2px;
 }}
 QGroupBox#cardGroup::title {{
@@ -396,7 +500,7 @@ QWidget#actionPanel {{
 QLabel#actionHint {{
     border-radius: 6px;
     background-color: {BG};
-    color: {P2};
+    color: {TS};
     font-size: 14px;
     line-height: 180%;
 }}
@@ -407,7 +511,7 @@ QLineEdit#fileInput {{
     border: 1px solid {BRD};
     border-radius: 6px;
     padding: 6px 10px;
-    color: {P3};
+    color: {TS};
     font-size: 11px;
 }}
 QLineEdit#configInput {{
@@ -439,7 +543,7 @@ QComboBox#configCombo {{
     border: 1px solid {BRD};
     border-radius: 6px;
     padding: 7px 10px;
-    color: {P2};
+    color: {TS};
     font-size: 12px;
     min-height: 18px;
 }}
@@ -454,12 +558,12 @@ QComboBox#configCombo QAbstractItemView {{
 }}
 
 /* ── Card tab: Labels ────────────────────────────────────────────────────── */
-QLabel#hintText    {{ color: {P2}; font-size: 11px; background-color: transparent;}}
+QLabel#hintText    {{ color: {TS}; font-size: 11px; background-color: transparent;}}
 QLabel#fieldLabel  {{ color: {TS}; font-size: 11px; background-color: transparent;}}
 QLabel#idFmtLabel  {{ color: {P1}; font-size: 10px; font-family: 'Consolas', monospace; background-color: transparent; margin-top: 3px; }}
-QLabel#resultLabel {{ color: {P2}; font-size: 11px; font-family: 'Consolas', monospace; padding: 4px; background-color: transparent;}}
+QLabel#resultLabel {{ color: {TS}; font-size: 11px; font-family: 'Consolas', monospace; padding: 4px; background-color: transparent;}}
 QLabel#countLabel  {{ font-size: 12px; color: {P1}; font-weight: 600; background-color: transparent;}}
-QLabel#progressLabel {{ color: {P2}; font-size: 10px; font-family: 'Consolas', monospace; background-color: transparent;}}
+QLabel#progressLabel {{ color: {TS}; font-size: 10px; font-family: 'Consolas', monospace; background-color: transparent;}}
 
 /* ── Card tab: Tombol ────────────────────────────────────────────────────── */
 QPushButton#btnBrowse {{
@@ -558,7 +662,7 @@ QGroupBox#camGroup {{
     margin-top: 8px;
     padding: 12px;
     font-size: 11px;
-    color: {P2};
+    color: {TS};
     font-weight: 700;
     letter-spacing: 1px;
 }}
@@ -615,10 +719,10 @@ QLabel#previewLabel {{
     background-color: transparent;
     border: 1px dashed {BRD};
     border-radius: 6px;
-    color: {P2};
+    color: {TS};
     font-size: 12px;
 }}
-QLabel#statusSmall {{ color: {P2}; font-size: 11px; background-color: transparent;}}
+QLabel#statusSmall {{ color: {TS}; font-size: 11px; background-color: transparent;}}
 QPushButton#btnPrimary {{
     background-color: {P1};
     color: {TOD};
@@ -654,7 +758,7 @@ QLabel#sidebarTitle {{
 }}
 QPushButton#sidebarBtn {{
     background-color: transparent;
-    color: {P2};
+    color: {TS};
     border: none;
     border-radius: 6px;
     padding: 10px 12px;
@@ -767,6 +871,7 @@ QTableWidget#analyticsTable {{
     font-size: 12px;
     alternate-background-color: {SRF};
 }}
+QTableWidget#analyticsTable::item {{ padding: 6px 10px; }}
 QTableWidget#analyticsTable QHeaderView::section {{
     background-color: {P1};
     color: {TOD};
@@ -782,7 +887,7 @@ QTableWidget#analyticsTable::item:selected {{ background-color: {P4}; color: {TP
 /* ── Analytics tab: Info labels ─────────────────────────────────────────────── */
 QLabel#analyticsInfo {{
     background-color: transparent;
-    color: {P2};
+    color: {TS};
     font-size: 13px;
     line-height: 150%;
 }}
@@ -843,10 +948,177 @@ QWidget#analyticsLogBar {{
 }}
 QLabel#analyticsLogText {{
     background-color: transparent;
-    color: {P2};
+    color: {TS};
     font-size: 10px;
     font-family: 'Consolas', monospace;
 }}
+
+/* ── Navigasi utama (sidebar) ───────────────────────────────────────────────
+   Macrostructure aplikasi produktivitas padat-data: navigasi persisten di
+   kiri (bukan tab horizontal) supaya (a) semua menu terlihat sekaligus tanpa
+   overflow saat menu bertambah, (b) label + ikon + shortcut angka terlihat
+   bersamaan untuk navigasi cepat via mouse ATAU keyboard (Ctrl+1..6), dan
+   (c) area kerja kanan mendapat lebar maksimum untuk tabel data.        ── */
+QWidget#navSidebar {{
+    background-color: {SRF};
+    border-right: 1px solid {BRD};
+}}
+QLabel#navBrand {{
+    background-color: transparent;
+    font-size: 15px;
+    font-weight: 700;
+    color: {P1};
+    letter-spacing: 0.2px;
+    padding: 2px 0px;
+}}
+QLabel#navBrandSub {{
+    background-color: transparent;
+    font-size: 10px;
+    color: {TS};
+    letter-spacing: 0.5px;
+}}
+QFrame#navDivider {{
+    background-color: {BRD};
+    max-height: 1px;
+}}
+QPushButton#navItem {{
+    background-color: transparent;
+    color: {TS};
+    border: none;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+}}
+QPushButton#navItem:hover {{
+    background-color: {BG};
+    color: {P1};
+}}
+QPushButton#navItem:checked {{
+    background-color: {P1};
+    color: {TOD};
+}}
+QLabel#navShortcut {{
+    background-color: transparent;
+    color: {TS};
+    font-size: 10px;
+    font-family: 'Consolas', monospace;
+}}
+QPushButton#navSettingsBtn {{
+    background-color: transparent;
+    color: {TS};
+    border: 1px solid {BRD};
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+}}
+QPushButton#navSettingsBtn:hover {{
+    color: {P1};
+    border-color: {P1};
+}}
+
+/* ── Jendela Pengaturan Aplikasi ─────────────────────────────────────────── */
+QDialog#settingsDialog {{
+    background-color: {BG};
+    color: {TP};
+}}
+QLabel#settingsTitle {{
+    background-color: transparent;
+    font-size: 18px;
+    font-weight: 700;
+    color: {P1};
+}}
+QLabel#settingsSubtitle {{
+    background-color: transparent;
+    font-size: 12px;
+    color: {TS};
+}}
+QWidget#settingsSection {{
+    background-color: {SRF};
+    border: 1px solid {BRD};
+    border-radius: 10px;
+}}
+QLabel#settingsSectionTitle {{
+    background-color: transparent;
+    font-size: 11px;
+    font-weight: 700;
+    color: {P1};
+    letter-spacing: 1px;
+}}
+QLabel#settingsFieldLabel {{
+    background-color: transparent;
+    font-size: 12px;
+    font-weight: 600;
+    color: {TP};
+}}
+QLabel#settingsFieldHint {{
+    background-color: transparent;
+    font-size: 11px;
+    color: {TS};
+}}
+QSpinBox#settingsInput {{
+    background-color: {BG};
+    border: 1px solid {BRD};
+    border-radius: 6px;
+    padding: 7px 10px;
+    color: {TP};
+    font-size: 13px;
+    min-height: 20px;
+}}
+QSpinBox#settingsInput:focus {{ border-color: {P1}; }}
+QLineEdit#settingsInput {{
+    background-color: {BG};
+    border: 1px solid {BRD};
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: {TP};
+    font-size: 13px;
+}}
+QLineEdit#settingsInput:focus {{ border-color: {P1}; }}
+QComboBox#settingsInput {{
+    background-color: {BG};
+    border: 1px solid {BRD};
+    border-radius: 6px;
+    padding: 7px 10px;
+    color: {TP};
+    font-size: 13px;
+    min-height: 20px;
+}}
+QComboBox#settingsInput:focus {{ border-color: {P1}; }}
+QComboBox#settingsInput QAbstractItemView {{
+    background-color: {BG};
+    border: 1px solid {BRD};
+    color: {TP};
+    selection-background-color: {P1};
+    selection-color: {TOD};
+}}
+QLabel#settingsSavedBadge {{
+    background-color: transparent;
+    color: {_c(p.log_success)};
+    font-size: 12px;
+    font-weight: 600;
+}}
+QPushButton#btnSettingsSave {{
+    background-color: {P1};
+    color: {TOD};
+    border: none;
+    border-radius: 6px;
+    padding: 9px 20px;
+    font-weight: 700;
+}}
+QPushButton#btnSettingsSave:hover {{ background-color: {P2}; }}
+QPushButton#btnSettingsCancel {{
+    background-color: transparent;
+    color: {TS};
+    border: 1px solid {BRD};
+    border-radius: 6px;
+    padding: 9px 18px;
+    font-weight: 600;
+}}
+QPushButton#btnSettingsCancel:hover {{ color: {TP}; border-color: {P2}; }}
 """
 
 

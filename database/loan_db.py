@@ -21,13 +21,17 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 
 from config import DATABASE_PATH
+from database import settings_db
 
 logger = logging.getLogger(__name__)
 
-# ── Konstanta ─────────────────────────────────────────────────────────────────
-DENDA_PER_HARI   = 500     # Rupiah per hari keterlambatan
-DURASI_PINJAM    = 7       # Hari pinjam default
-MAX_PINJAM       = 3       # Maksimal buku dipinjam sekaligus per anggota
+# ── Konstanta fallback ────────────────────────────────────────────────────────
+# Nilai ini hanya dipakai jika settings_db belum pernah diset (instalasi baru).
+# Nilai yang benar-benar dipakai aplikasi ada di database/settings_db.py dan
+# bisa diubah lewat jendela Pengaturan (gui/settings_dialog.py) tanpa restart.
+DENDA_PER_HARI   = 500     # Rupiah per hari keterlambatan (fallback)
+DURASI_PINJAM    = 7       # Hari pinjam default (fallback)
+MAX_PINJAM       = 3       # Maksimal buku dipinjam sekaligus per anggota (fallback)
 
 
 def _get_connection() -> sqlite3.Connection:
@@ -85,7 +89,7 @@ def borrow_book(
     barcode_anggota: str,
     nama_anggota: str,
     kode_buku: str,
-    durasi_hari: int = DURASI_PINJAM,
+    durasi_hari: int | None = None,
     petugas: str = "",
     catatan: str = "",
 ) -> tuple[bool, str]:
@@ -94,7 +98,7 @@ def borrow_book(
 
     Validasi:
         - Buku tersedia (jumlah_tersedia > 0)
-        - Anggota tidak melebihi MAX_PINJAM buku aktif
+        - Anggota tidak melebihi batas maks pinjam (lihat Pengaturan)
         - Anggota tidak sedang meminjam buku yang sama
 
     Returns:
@@ -102,6 +106,10 @@ def borrow_book(
         (False, pesan_error)       — gagal
     """
     from database.book_db import get_book_by_kode
+
+    if durasi_hari is None:
+        durasi_hari = settings_db.get_durasi_pinjam()
+    max_pinjam = settings_db.get_max_pinjam()
 
     barcode_anggota = barcode_anggota.strip().upper()
     kode_buku       = kode_buku.strip().upper()
@@ -128,9 +136,9 @@ def borrow_book(
                 (barcode_anggota,),
             ).fetchone()[0]
 
-            if aktif >= MAX_PINJAM:
+            if aktif >= max_pinjam:
                 return False, (
-                    f"Anggota sudah meminjam {aktif} buku (batas: {MAX_PINJAM}).\n"
+                    f"Anggota sudah meminjam {aktif} buku (batas: {max_pinjam}).\n"
                     "Kembalikan buku sebelum meminjam lagi."
                 )
 
@@ -203,7 +211,7 @@ def return_book(
             today    = date.today()
             due_date = date.fromisoformat(loan["tanggal_kembali_rencana"])
             terlambat = max(0, (today - due_date).days)
-            denda     = terlambat * DENDA_PER_HARI
+            denda     = terlambat * settings_db.get_denda_per_hari()
             status    = "terlambat" if terlambat > 0 else "dikembalikan"
 
             conn.execute(
@@ -275,7 +283,7 @@ def get_overdue_loans() -> list[dict]:
     """
     try:
         with _get_connection() as conn:
-            rows = conn.execute(sql, (today, today, DENDA_PER_HARI, today)).fetchall()
+            rows = conn.execute(sql, (today, today, settings_db.get_denda_per_hari(), today)).fetchall()
         return [dict(r) for r in rows]
     except sqlite3.Error as exc:
         logger.error("Gagal ambil peminjaman terlambat: %s", exc)
