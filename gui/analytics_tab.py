@@ -14,6 +14,14 @@ Panel tersedia:
   4. Per jam        — distribusi jam visual + tabel
   5. Tidak aktif    — tabel anggota belum pernah masuk
   6. Export         — export Excel & PDF
+
+Catatan styling:
+  Tab ini TIDAK menyetel stylesheet lokal. Semua tampilan (warna, border,
+  radius, dst) datang dari QSS global di theme.py — lihat bagian
+  "Analytics tab: ..." di stylesheet(). objectName di widget-widget bawah
+  ini harus selalu cocok dengan selector yang ada di sana. Kalau menambah
+  komponen baru dengan objectName baru, tambahkan juga selector-nya di
+  theme.py, jangan setStyleSheet() di sini.
 """
 
 import logging
@@ -150,15 +158,23 @@ class StatCard(QFrame):
 
 
 class MiniBarChart(QWidget):
-    """Bar chart sederhana berbasis QPainter (tidak butuh QtCharts)."""
+    """Bar chart sederhana berbasis QPainter (tidak butuh QtCharts).
+
+    Digambar manual lewat paintEvent, jadi warnanya TIDAK bisa datang dari
+    QSS (stylesheet tidak menjangkau custom-painted widget). Karena itu
+    widget ini mengambil warna langsung dari get_palette() — baik sebagai
+    default awal maupun saat set_data() dipanggil — supaya tetap ikut tema
+    aktif tanpa perlu stylesheet lokal.
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._data: list[dict] = []   # list {"label": str, "value": float}
-        self._color_primary  = "#4A5E3A"
-        self._color_accent   = "#B85C2A"
-        self._color_bg       = "#E8E3D8"
-        self._color_text     = "#6B7F58"
+        p = _p()
+        self._color_primary  = f"#{p.p1}"
+        self._color_accent   = f"#{p.p4}"
+        self._color_bg       = f"#{p.surface}"
+        self._color_text     = f"#{p.p2}"
         self.setMinimumHeight(120)
 
     def set_data(self, data: list[dict],
@@ -690,7 +706,13 @@ _PANELS = [
 
 
 class AnalyticsTab(QWidget):
-    """Tab analisis data — sidebar + konten."""
+    """Tab analisis data — sidebar + konten.
+
+    Tidak memanggil setStyleSheet() sendiri — tampilan sepenuhnya
+    mengikuti QSS global dari theme.stylesheet() yang di-set sekali di
+    app level (lihat main.py). objectName widget di sini harus selalu
+    disamakan dengan selector "Analytics tab: ..." di theme.py.
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -699,7 +721,6 @@ class AnalyticsTab(QWidget):
         self._sb_buttons: dict[str, QPushButton] = {}
 
         self._build_ui()
-        self._apply_style()
 
         # Default: 30 hari terakhir
         today = date.today()
@@ -937,227 +958,3 @@ class AnalyticsTab(QWidget):
         html   = (f'<span style="color:{ts_clr}">[{ts}]</span> '
                   f'<span style="color:{color}">{prefix} {message}</span>')
         self._log_console.setHtml(html)
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # Style
-    # ══════════════════════════════════════════════════════════════════════════
-
-    def _apply_style(self):
-        p = _p()
-        P1  = f"#{p.p1}"; P2  = f"#{p.p2}"; P3  = f"#{p.p3}"; P4  = f"#{p.p4}"
-        TP  = f"#{p.text_primary}"; TS = f"#{p.text_secondary}"
-        TOD = f"#{p.text_on_dark}"
-        BG  = f"#{p.bg}"; SRF = f"#{p.surface}"; BRD = f"#{p.border}"
-        LBG = f"#{p.log_bg}"; LTX = f"#{p.log_text}"
-
-        self.setStyleSheet(f"""
-            /* Sidebar */
-            QWidget#analyticsSidebar {{
-                background-color: {P1};
-                border-right: 1px solid {P2};
-            }}
-            QLabel#sidebarTitle {{
-                color: {P4};
-                font-size: 10px;
-                font-weight: 700;
-                letter-spacing: 1.8px;
-            }}
-            QFrame#sidebarDivider {{ color: rgba(255,255,255,0.15); }}
-
-            QPushButton#sidebarBtn {{
-                background-color: transparent;
-                color: rgba(249,246,238,0.65);
-                border: none;
-                border-radius: 6px;
-                padding: 8px 12px;
-                text-align: left;
-                font-size: 12px;
-                font-weight: 500;
-            }}
-            QPushButton#sidebarBtn:hover {{
-                background-color: rgba(255,255,255,0.1);
-                color: {TOD};
-            }}
-            QPushButton#sidebarBtn:checked {{
-                background-color: rgba(255,255,255,0.18);
-                color: {TOD};
-                font-weight: 700;
-            }}
-
-            QProgressBar#loadingBar {{
-                background-color: {P2};
-                border: none;
-            }}
-            QProgressBar#loadingBar::chunk {{
-                background-color: {P4};
-            }}
-
-            /* Filter bar */
-            QWidget#analyticsFilterBar {{
-                background-color: {SRF};
-                border-bottom: 1px solid {BRD};
-            }}
-            QLabel#filterLabel {{
-                color: {TS};
-                font-size: 12px;
-                font-weight: 500;
-            }}
-            QDateEdit#filterDate {{
-                background-color: {BG};
-                border: 1px solid {BRD};
-                border-radius: 6px;
-                padding: 5px 8px;
-                color: {TP};
-                font-size: 12px;
-            }}
-            QDateEdit#filterDate:focus {{ border-color: {P1}; }}
-
-            QPushButton#filterShortcut {{
-                background-color: {BG};
-                color: {P1};
-                border: 1px solid {P3};
-                border-radius: 5px;
-                padding: 4px 10px;
-                font-size: 11px;
-                font-weight: 600;
-            }}
-            QPushButton#filterShortcut:hover {{ background-color: {P4}; }}
-
-            QPushButton#btnRefresh {{
-                background-color: {P1};
-                color: {TOD};
-                border: none;
-                border-radius: 6px;
-                padding: 6px 14px;
-                font-size: 12px;
-                font-weight: 600;
-            }}
-            QPushButton#btnRefresh:hover {{ background-color: {P2}; }}
-            QPushButton#btnRefresh:disabled {{ background-color: {P3}; }}
-
-            /* Content area */
-            QWidget#analyticsRight {{ background-color: {BG}; }}
-            QWidget#analyticsStack {{ background-color: {BG}; }}
-            QScrollArea#analyticsScroll {{ background-color: {BG}; border: none; }}
-            QScrollArea#analyticsScroll > QWidget > QWidget {{ background-color: {BG}; }}
-
-            /* Section labels */
-            QLabel#analyticsSectionLabel {{
-                font-size: 13px;
-                font-weight: 700;
-                color: {P2};
-                letter-spacing: 1.2px;
-                text-transform: uppercase;
-                padding-bottom: 4px;
-            }}
-
-            /* Cards */
-            QFrame#statCard, QWidget#analyticsCard {{
-                background-color: white;
-                border: 0.5px solid {BRD};
-                border-radius: 10px;
-            }}
-            QLabel#statCardValue {{
-                color: {TP};
-            }}
-            QLabel#statCardValueAcc {{
-                color: {P1};
-            }}
-            QLabel#statCardLabel {{
-                color: {P2};
-                font-size: 11px;
-            }}
-
-            /* Info text */
-            QLabel#analyticsInfo {{
-                color: {TS};
-                font-size: 11px;
-                line-height: 160%;
-            }}
-            QLabel#analyticsCountLabel {{
-                color: {P1};
-                font-size: 12px;
-                font-weight: 600;
-            }}
-
-            /* Tabel */
-            QTableWidget#analyticsTable {{
-                background-color: white;
-                border: 0.5px solid {BRD};
-                border-radius: 8px;
-                gridline-color: {BRD};
-                color: {TP};
-                font-size: 12px;
-                alternate-background-color: {SRF};
-            }}
-            QTableWidget#analyticsTable QHeaderView::section {{
-                background-color: {P1};
-                color: {TOD};
-                font-size: 10px;
-                font-weight: 700;
-                letter-spacing: 0.8px;
-                border: none;
-                border-bottom: 1px solid {P2};
-                padding: 6px;
-            }}
-            QTableWidget#analyticsTable::item:selected {{
-                background-color: {P4};
-                color: {TP};
-            }}
-
-            /* Log inline */
-            QWidget#analyticsLogBar {{
-                background-color: {SRF};
-                border-top: 1px solid {BRD};
-            }}
-            QTextEdit#logConsoleInline {{
-                background-color: transparent;
-                border: none;
-                color: {LTX};
-                font-family: 'Consolas', monospace;
-                font-size: 11px;
-                padding: 0;
-            }}
-
-            /* Export panel */
-            QLabel#exportTitle {{
-                color: {TP};
-                font-size: 13px;
-                font-weight: 600;
-            }}
-            QFrame#exportDivider {{ color: {BRD}; }}
-            QPushButton#btnExportExcel {{
-                background-color: {P1};
-                color: {TOD};
-                border: none;
-                border-radius: 8px;
-                padding: 10px 18px;
-                font-size: 12px;
-                font-weight: 700;
-                min-width: 140px;
-            }}
-            QPushButton#btnExportExcel:hover {{ background-color: {P2}; }}
-            QPushButton#btnExportPdf {{
-                background-color: #B85C2A;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 10px 18px;
-                font-size: 12px;
-                font-weight: 700;
-                min-width: 140px;
-            }}
-            QPushButton#btnExportPdf:hover {{ background-color: #C86A38; }}
-
-            QProgressBar#genProgress {{
-                background-color: {SRF};
-                border: 1px solid {BRD};
-                border-radius: 5px;
-                height: 6px;
-                color: transparent;
-            }}
-            QProgressBar#genProgress::chunk {{
-                background-color: {P1};
-                border-radius: 4px;
-            }}
-        """)

@@ -5,7 +5,7 @@ Alur:
 1. Upload Excel sumber (kolom: Nama, [opsional: Kelas, dll])
 2. Generate ID Barcode otomatis: "{YYYY}-{NNNN}" (contoh: 2025-0001)
 3. Simpan ke anggota.xlsx (append / buat baru)
-4. Generate gambar barcode Code 128 per anggota → folder barcode_images/
+4. Generate gambar QR Code per anggota → folder barcode_images/
 5. Generate .docx berisi tabel kartu (N kartu per halaman) siap cetak
 """
 
@@ -17,16 +17,14 @@ from typing import Optional
 
 import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
-from barcode import Code128
-from barcode.writer import ImageWriter
+import qrcode
+from qrcode.constants import ERROR_CORRECT_M
 from docx import Document
 from docx.shared import Cm, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
-from PIL import Image
-import io
 
 from config import (
     MEMBER_EXCEL_PATH,
@@ -288,11 +286,13 @@ def generate_barcode_images(
     on_progress=None,
 ) -> dict[str, Path]:
     """
-    Generate gambar barcode Code 128 PNG untuk setiap anggota.
+    Generate gambar QR Code PNG untuk setiap anggota.
+    (Nama fungsi/parameter dipertahankan "barcode_*" untuk kompatibilitas
+    dengan pemanggil lain, meski isinya sekarang QR Code.)
 
     Args:
         members_with_id : list hasil assign_barcode_ids()
-        barcode_dir     : folder output untuk gambar barcode (default: BARCODE_DIR)
+        barcode_dir     : folder output untuk gambar QR (default: BARCODE_DIR)
         on_progress     : callback(current, total) untuk progress bar GUI
 
     Returns:
@@ -300,7 +300,7 @@ def generate_barcode_images(
     """
     if barcode_dir is None:
         barcode_dir = BARCODE_DIR
-    
+
     _ensure_dirs(barcode_dir, CARDS_DIR)
     results: dict[str, Path] = {}
     total = len(members_with_id)
@@ -311,37 +311,27 @@ def generate_barcode_images(
         out_path   = barcode_dir / f"{safe_name}.png"
 
         try:
-            # Generate barcode ke bytes buffer
-            buf = io.BytesIO()
-            writer = ImageWriter()
-            writer.set_options({
-                "module_width":  0.9,
-                "module_height": 8.0,
-                "quiet_zone":    2.0,
-                "font_size":     7,
-                "text_distance": 2.5,
-                "write_text":    True,
-                "dpi":           300,
-                "foreground":    "black",
-                "background":    "white",
-            })
-            code = Code128(barcode_id, writer=writer)
-            code.write(buf, options={"write_text": True})
+            qr = qrcode.QRCode(
+                version=None,                     # ukuran otomatis mengikuti panjang ID
+                error_correction=ERROR_CORRECT_M,  # toleransi ~15% kerusakan (noda/lipatan)
+                box_size=15,                       # resolusi per modul → hasil tajam saat dicetak
+                border=3,                          # quiet zone wajib agar mudah discan
+            )
+            qr.add_data(barcode_id)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            img.save(str(out_path))
 
-            # Simpan PNG
-            buf.seek(0)
-            img = Image.open(buf)
-            img.save(str(out_path), "PNG", dpi=(300, 300))
             results[barcode_id] = out_path
-            logger.debug("Barcode PNG: %s → %s", barcode_id, out_path.name)
+            logger.debug("QR Code PNG: %s → %s", barcode_id, out_path.name)
 
         except Exception as exc:
-            logger.error("Gagal generate barcode %s: %s", barcode_id, exc)
+            logger.error("Gagal generate QR Code %s: %s", barcode_id, exc)
 
         if on_progress:
             on_progress(idx + 1, total)
 
-    logger.info("Generate barcode selesai: %d/%d berhasil", len(results), total)
+    logger.info("Generate QR Code selesai: %d/%d berhasil", len(results), total)
     return results
 
 
@@ -417,7 +407,7 @@ def _add_card_to_cell(
         │   Nama Sekolah (bold, center)        │  ← header row, full width
         │   Kartu Perpustakaan (center)        │
         ├──────────────────────┬──────────────┤
-        │  Nama: ...           │  [BARCODE]   │  ← info kiri, barcode kanan
+        │  Nama: ...           │  [QR CODE]   │  ← info kiri, QR kanan
         │  ID Kartu: ...       │              │
         └──────────────────────┴──────────────┘
     """
@@ -489,7 +479,7 @@ def _add_card_to_cell(
     inner = body_cell.add_table(rows=1, cols=2)
     inner.style = "Table Grid"
 
-    # Lebar: kiri 55%, kanan 45%
+    # Lebar: kiri 50%, kanan 50% (kolom barcode diperbesar agar lebih mudah discan)
     inner_tbl  = inner._tbl
     inner_tblPr = inner_tbl.find(qn("w:tblPr"))
     if inner_tblPr is None:
@@ -505,7 +495,7 @@ def _add_card_to_cell(
         for c in col.cells:
             tcPr = c._tc.get_or_add_tcPr()
             tcW  = OxmlElement("w:tcW")
-            pct  = "2750" if col_idx == 0 else "2250"   # 55% : 45%
+            pct  = "2500" if col_idx == 0 else "2500"   # 50% : 50%
             tcW.set(qn("w:w"),    pct)
             tcW.set(qn("w:type"), "pct")
             tcPr.append(tcW)
@@ -567,11 +557,11 @@ def _add_card_to_cell(
         p_bc.paragraph_format.space_before = Pt(0)
         p_bc.paragraph_format.space_after  = Pt(0)
         run_bc = p_bc.add_run()
-        run_bc.add_picture(str(barcode_path), width=Cm(3.2))
+        run_bc.add_picture(str(barcode_path), width=Cm(3.3))  # QR persegi, disesuaikan agar muat tinggi kartu
     else:
         p_bc = right_cell.paragraphs[0]
         p_bc.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        r_na = p_bc.add_run("[no barcode]")
+        r_na = p_bc.add_run("[no QR]")
         r_na.font.size = Pt(7)
         r_na.font.color.rgb = RGBColor(0xAA, 0xAA, 0xAA)
 

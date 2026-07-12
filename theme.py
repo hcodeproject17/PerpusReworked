@@ -78,27 +78,26 @@ SAGE_LIGHT = Palette(
     log_info    = "7D8F69",   # info — sage menengah
 )
 
-# ── Tema: Dark Original (tema gelap dari versi awal) ─────────────────────────
-DARK_ORIGINAL = Palette(
-    p1 = "4f9cf9",
-    p2 = "2a2f3d",
-    p3 = "3e4455",
-    p4 = "4ade80",
+GLOWING_MOSS = Palette(
+    p1 = "6A7A5D",  # Muted forest green / Hijau hutan pudar
+    p2 = "88997A",  # Soft sage / Hijau sage terang
+    p3 = "B2C0A5",  # Pale moss / Hijau lumut pucat
+    p4 = "C8B992",  # Muted sand / Pasir pudar untuk aksen
 
-    text_primary   = "e2e4ed",
-    text_secondary = "8892aa",
-    text_on_dark   = "0d0f14",   # navi gelap — putih di atas P1 (biru terang) hanya 2.82:1 (gagal AA), navi gelap capai 6.8:1
+    text_primary   = "E8E6DF",  # Putih tulang pucat (tidak menyilaukan)
+    text_secondary = "9C9F96",  # Abu-abu kehijauan pudar
+    text_on_dark   = "111310",  # Hijau arang pekat (untuk teks di atas tombol p1/p2)
 
-    bg      = "13161e",
-    surface = "181b24",
-    border  = "252938",
+    bg      = "111310",  # Hijau arang sangat pekat (hampir hitam)
+    surface = "1A1D18",  # Hijau batu gelap (sedikit lebih terang dari bg)
+    border  = "2B3027",  # Garis batas abu-abu hijau redup
 
-    log_bg      = "0d0f14",
-    log_text    = "8892aa",
-    log_success = "4ade80",
-    log_warning = "facc15",
-    log_error   = "f87171",
-    log_info    = "94a3b8",
+    log_bg      = "0A0B09",  # Hitam pekat dengan sedikit rona hijau
+    log_text    = "B2C0A5",  # Sama dengan p3
+    log_success = "7DA36D",  # Hijau klorofil redup
+    log_warning = "CCA35C",  # Kuning emas tua
+    log_error   = "C26A5F",  # Merah karat terang
+    log_info    = "7292A1",  # Biru kabut malam
 )
 
 WHITE_FOREST = Palette(
@@ -193,59 +192,105 @@ RIVERSTONE = Palette(
     log_info    = "7C96A8",
 )
 
-MONDAY_LIGHT = Palette(
-    p1 = "0073EA",  # Signature Monday Blue (Aksen utama)
-    p2 = "3B90FF",  # Bright Blue (Hover / Aksen sekunder)
-    p3 = "74AFFF",  # Soft Blue
-    p4 = "784BD1",  # Monday Purple (Variasi aksen)
+SANDSTONE = Palette(
+    p1 = "82623B",  # Deep ochre / Cokelat emas gelap
+    p2 = "A38052",  # Warm caramel / Karamel redup
+    p3 = "C4A77D",  # Soft beige / Krem gandum
+    p4 = "E6C998",  # Pale gold / Kuning pasir pucat
 
-    text_primary   = "1C1F26",  # Charcoal gelap (sangat kontras & bersih)
-    text_secondary = "676879",  # Slate gray untuk teks pembantu/sub-judul
-    text_on_dark   = "FFFFFF",  # Teks putih jika di atas warna gelap
+    text_primary   = "2B2013",  # Cokelat kopi pekat
+    text_secondary = "82623B",  # Sama dengan p1
+    text_on_dark   = "FBF8F1",  # Putih gading
 
-    bg      = "F5F6F8",  # Latar belakang utama Monday.com (Abu-abu sangat terang)
-    surface = "FFFFFF",  # Latar belakang panel/tabel (Putih bersih)
-    border  = "D0D4DC",  # Garis pembatas khas Monday yang tegas tapi tipis
+    bg      = "F7F4EB",  # Krem sangat terang (hampir putih)
+    surface = "EBE3D3",  # Krem pasir hangat
+    border  = "D1C3A5",  # Cokelat pudar
 
-    log_bg      = "1C1F26",  # Panel log dibuat gelap untuk kontras estetika
-    log_text    = "C5D9F1",
-    log_success = "00C875",  # Ikonik "Done" Green
-    log_warning = "FDAB3D",  # Ikonik "Working on it" Orange
-    log_error   = "E2445C",  # Ikonik "Stuck" Red
-    log_info    = "0073EA",
+    log_bg      = "231A0F",  # Cokelat tanah hitam
+    log_text    = "C4A77D",  # Sama dengan p3
+    log_success = "A3C47D",  # Hijau daun redup
+    log_warning = "E3B666",  # Kuning madu
+    log_error   = "DF7C72",  # Merah koral redup
+    log_info    = "C4A77D",
 )
 
-MONDAY_DARK = Palette(
-    p1 = "1F85FF",  # Electric Blue (Ditingkatkan kecerahannya untuk mode gelap)
-    p2 = "5C9DFF",  # Soft Electric Blue
-    p3 = "99C2FF",  # Muted Blue
-    p4 = "9B73E6",  # Muted Purple
+DUSKSTONE = Palette(
+    p1 = "52485E",  # Deep dusty plum / Ungu gelap pudar
+    p2 = "71647F",  # Muted mauve / Lembayung redup
+    p3 = "998BA8",  # Soft lavender gray / Abu-abu keunguan
+    p4 = "C7B2A9",  # Warm dusty rose / Merah muda abu-abu sebagai aksen
 
-    text_primary   = "E1E6EB",  # Putih pudar agar nyaman dibaca lama
-    text_secondary = "A0A6B5",  # Abu-abu medium untuk teks sekunder
-    text_on_dark   = "FFFFFF",
+    text_primary   = "1A161E",  # Ungu kehitaman gelap
+    text_secondary = "52485E",  # Sama dengan p1
+    text_on_dark   = "F8F5FA",  # Putih salju dengan sentuhan ungu
 
-    bg      = "18191C",  # Khas Monday Night Mode (Sangat gelap & elegan)
-    surface = "292C33",  # Permukaan panel/tabel (Lebih terang dari bg)
-    border  = "3E424B",  # Garis pembatas gelap yang halus namun tetap terlihat
+    bg      = "F3EFF5",  # Abu-abu ungu sangat terang
+    surface = "E6E0E9",  # Abu-abu lembayung pucat
+    border  = "C2BAC7",  # Garis batas abu-abu ungu
 
-    log_bg      = "0D0E11",  # Panel log super gelap
-    log_text    = "99C2FF",
-    log_success = "00E687",  # Hijau status (Lebih neon agar terbaca jelas)
-    log_warning = "FFBA53",  # Jingga status
-    log_error   = "FF5570",  # Merah status
-    log_info    = "1F85FF",
+    log_bg      = "19151C",  # Malam gelap
+    log_text    = "998BA8",  # Sama dengan p3
+    log_success = "93C298",  # Hijau mint pudar
+    log_warning = "DDB87C",  # Kuning senja
+    log_error   = "CD7987",  # Merah mawar pudar
+    log_info    = "998BA8",
+)
+
+ASHWOOD = Palette(
+    p1 = "5B5652",  # Dark taupe / Abu-abu kecokelatan gelap
+    p2 = "7A746E",  # Muted warm gray / Abu-abu hangat
+    p3 = "A19B96",  # Soft ash / Warna debu kayu
+    p4 = "859688",  # Muted sage / Hijau lumut pudar sebagai aksen
+
+    text_primary   = "1E1C1A",  # Abu-abu kehitaman pekat
+    text_secondary = "5B5652",  # Sama dengan p1
+    text_on_dark   = "F5F4F2",  # Putih tulang
+
+    bg      = "F0EFEA",  # Abu-abu sangat terang
+    surface = "E2DFDA",  # Abu-abu batu koral muda
+    border  = "C1BCB7",  # Abu-abu pudar
+
+    log_bg      = "1E1C1A",  # Arang gelap
+    log_text    = "A19B96",  # Sama dengan p3
+    log_success = "96B392",  # Hijau herbal
+    log_warning = "D1BE84",  # Kuning zaitun pucat
+    log_error   = "C77B77",  # Merah terakota pudar
+    log_info    = "A19B96",
+)
+
+DEEP_TERRA = Palette(
+    p1 = "945A4C",  # Muted rust / Karat bata terang
+    p2 = "B37766",  # Soft terracotta / Tanah liat terang
+    p3 = "D6A79A",  # Pale peach / Persik debu
+    p4 = "C7A56F",  # Muted ochre / Emas pasir
+
+    text_primary   = "EAE6E1",  # Krem putih sangat lembut
+    text_secondary = "A39994",  # Cokelat keabu-abuan pudar
+    text_on_dark   = "14100F",  # Kopi hitam pekat
+
+    bg      = "14100F",  # Kopi hitam pekat (hampir hitam)
+    surface = "1F1917",  # Cokelat arang (sedikit lebih terang dari bg)
+    border  = "332824",  # Garis batas cokelat gelap
+
+    log_bg      = "0A0807",  # Hitam pekat absolut dengan rona hangat
+    log_text    = "D6A79A",  # Sama dengan p3
+    log_success = "8DA671",  # Hijau zaitun
+    log_warning = "D4A86A",  # Kuning jingga redup
+    log_error   = "D17769",  # Merah koral terang
+    log_info    = "D6A79A",
 )
 
 # ── Registri tema ─────────────────────────────────────────────────────────────
 _THEMES: dict[str, Palette] = {
     "sage_light":    SAGE_LIGHT,
-    "dark_original": DARK_ORIGINAL,
+    "glowing_moss": GLOWING_MOSS,
     "earthstone": EARTHSTONE,
     "terracotta": TERRACOTTA,
     "riverstone": RIVERSTONE,
-    "monday_light": MONDAY_LIGHT,
-    "monday_dark": MONDAY_DARK,
+    "sandstone": SANDSTONE,
+    "duskstone": DUSKSTONE,
+    "ashwood": ASHWOOD,
+    "deep_terra": DEEP_TERRA,
 }
 
 def get_palette() -> Palette:
@@ -364,9 +409,9 @@ QLabel#cameraDisplay {{
     color: {TS};
     font-size: 13px;
 }}
-QLabel#camStatusStandby {{ color: {TS}; font-size: 11px; font-weight: 600; }}
-QLabel#camStatusActive  {{ color: {P1}; font-size: 11px; font-weight: 600; }}
-QLabel#camStatusError   {{ color: #C0392B; font-size: 11px; font-weight: 600; }}
+QLabel#camStatusStandby {{ background-color: transparent; color: {TS}; font-size: 11px; font-weight: 600; }}
+QLabel#camStatusActive  {{ background-color: transparent; color: {P1}; font-size: 11px; font-weight: 600; }}
+QLabel#camStatusError   {{ background-color: transparent; color: #C0392B; font-size: 11px; font-weight: 600; }}
 
 /* ── Search ──────────────────────────────────────────────────────────────── */
 QWidget#searchContainer {{
@@ -499,7 +544,7 @@ QWidget#actionPanel {{
 }}
 QLabel#actionHint {{
     border-radius: 6px;
-    background-color: {BG};
+    background-color: transparent;
     color: {TS};
     font-size: 14px;
     line-height: 180%;
@@ -673,6 +718,7 @@ QGroupBox#camGroup::title {{
     background-color: {SRF};
 }}
 QRadioButton {{
+    background-color: transparent;
     color: {TP};
     font-size: 13px;
     spacing: 8px;
@@ -804,6 +850,22 @@ QDateEdit QAbstractItemView {{
     selection-background-color: {P1};
     selection-color: {TOD};
 }}
+QLabel#filterLabel {{
+    background-color: transparent;
+    color: {TS};
+    font-size: 12px;
+    font-weight: 500;
+}}
+QPushButton#filterShortcut {{
+    background-color: {BG};
+    color: {P1};
+    border: 1px solid {P3};
+    border-radius: 5px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+}}
+QPushButton#filterShortcut:hover {{ background-color: {P4}; }}
 QPushButton#btnRefresh {{
     background-color: {P1};
     color: {TOD};
@@ -951,6 +1013,14 @@ QLabel#analyticsLogText {{
     color: {TS};
     font-size: 10px;
     font-family: 'Consolas', monospace;
+}}
+QTextEdit#logConsoleInline {{
+    background-color: transparent;
+    border: none;
+    color: {_c(p.log_text)};
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 11px;
+    padding: 0px;
 }}
 
 /* ── Navigasi utama (sidebar) ───────────────────────────────────────────────

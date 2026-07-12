@@ -25,12 +25,14 @@ import theme as theme_module
 
 APP_THEME_LABELS = {
     "sage_light":    "Sage Light — hijau natural, terang",
-    "dark_original":  "Dark Original — gelap",
+    "glowing_moss":  "Glowing Moss — hutan malam, gelap",
     "earthstone":     "Earthstone — hijau bumi, netral",
     "terracotta":     "Terracotta — tanah liat, hangat",
     "riverstone":     "Riverstone — abu kabut, redup",
-    "monday_light":   "Monday Light — bersih, terstruktur",
-    "monday_dark":    "Monday Dark — premium, tenang",
+    "sandstone":     "Sandstone — pasir gurun, gandum",
+    "duskstone":     "Duskstone — bunga liar, lembayung senja",
+    "ashwood":      "Ashwood — kayu lapuk, kabut hutan",
+    "deep_terra":     "Deep Terra — bara api, gelap"
 }
 
 
