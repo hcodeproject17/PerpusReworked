@@ -51,7 +51,11 @@ CAMERA_FPS: int            = 30
 
 # ── Barcode scanner ───────────────────────────────────────────────────────────
 BARCODE_DEBOUNCE_SECONDS: float = 2.0   # Jeda minimum antar scan barcode sama
-BARCODE_TYPE_FILTER: str        = "CODE128,QRCODE"
+# Semua label (kartu anggota & label buku) sekarang QR Code — lihat
+# core/card_generator.py dan core/book_barcode_generator.py. Kalau nanti ada
+# kebutuhan baca Code128 lagi (mis. barcode ISBN cetakan penerbit), tambahkan
+# balik jadi "CODE128,QRCODE".
+BARCODE_TYPE_FILTER: str        = "QRCODE"
 
 # ── GUI ───────────────────────────────────────────────────────────────────────
 APP_NAME: str    = "PerpusReworked"

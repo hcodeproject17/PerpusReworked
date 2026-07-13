@@ -1,35 +1,40 @@
 """
-core/book_barcode_generator.py — Generator label barcode buku massal
+core/book_barcode_generator.py — Generator label QR Code buku massal
 
 Alur:
 1. Ambil data buku dari SQLite (semua / filter kategori / pilihan manual)
-2. Generate gambar barcode Code 128 PNG per buku → folder book_barcode_images/
-3. Generate .docx berisi tabel label barcode (N label per baris) siap cetak
+2. Generate gambar QR Code PNG per buku → folder book_barcode_images/
+3. Generate .docx berisi tabel label QR Code (N label per baris) siap cetak
 
 Format label per buku:
     ┌────────────────────────┐
-    │  ▮▮▮▮ BARCODE ▮▮▮▮    │
+    │     [ QR CODE ]        │
     │  BK-2025-0001          │
     │  Judul Buku            │
     │  Pengarang             │  ← opsional
     └────────────────────────┘
+
+Catatan: sebelumnya modul ini men-generate barcode Code 128 (python-barcode).
+Sejak aplikasi belum dirilis, format label diseragamkan penuh ke QR Code —
+selaras dengan kartu anggota (core/card_generator.py) dan filter scanner
+di config.py (BARCODE_TYPE_FILTER = "QRCODE"). QR dipilih karena jauh
+lebih toleran terhadap sudut/pencahayaan saat dibaca lewat webcam
+dibanding barcode linear, dan alat pemindai USB 2D kini cukup terjangkau.
 """
 
 import logging
-import io
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from barcode import Code128
-from barcode.writer import ImageWriter
+import qrcode
+from qrcode.constants import ERROR_CORRECT_M
 from docx import Document
 from docx.shared import Cm, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
-from PIL import Image
 
 from config import BASE_DIR
 
@@ -164,7 +169,10 @@ def generate_book_barcode_images(
     on_progress=None,
 ) -> dict[str, Path]:
     """
-    Generate barcode Code 128 PNG untuk setiap buku.
+    Generate gambar QR Code PNG untuk setiap buku.
+    (Nama fungsi/parameter dipertahankan "barcode_*" untuk kompatibilitas
+    dengan pemanggil lain, meski isinya sekarang QR Code — sama seperti
+    core/card_generator.py untuk kartu anggota.)
 
     Args:
         books       : list hasil fetch_books()
@@ -187,35 +195,27 @@ def generate_book_barcode_images(
         out_path = barcode_dir / f"{safe}.png"
 
         try:
-            buf    = io.BytesIO()
-            writer = ImageWriter()
-            writer.set_options({
-                "module_width":  0.8,
-                "module_height": 7.0,
-                "quiet_zone":    2.0,
-                "font_size":     7,
-                "text_distance": 2.5,
-                "write_text":    True,
-                "dpi":           300,
-                "foreground":    "black",
-                "background":    "white",
-            })
-            code = Code128(kode, writer=writer)
-            code.write(buf, options={"write_text": True})
+            qr = qrcode.QRCode(
+                version=None,                     # ukuran otomatis mengikuti panjang kode
+                error_correction=ERROR_CORRECT_M,  # toleransi ~15% kerusakan (noda/lipatan)
+                box_size=15,                       # resolusi per modul → hasil tajam saat dicetak
+                border=3,                          # quiet zone wajib agar mudah discan
+            )
+            qr.add_data(kode)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            img.save(str(out_path))
 
-            buf.seek(0)
-            img = Image.open(buf)
-            img.save(str(out_path), "PNG", dpi=(300, 300))
             results[kode] = out_path
-            logger.debug("Barcode buku: %s → %s", kode, out_path.name)
+            logger.debug("QR Code buku: %s → %s", kode, out_path.name)
 
         except Exception as exc:
-            logger.error("Gagal generate barcode buku %s: %s", kode, exc)
+            logger.error("Gagal generate QR Code buku %s: %s", kode, exc)
 
         if on_progress:
             on_progress(idx + 1, total)
 
-    logger.info("Barcode buku selesai: %d/%d berhasil", len(results), total)
+    logger.info("QR Code buku selesai: %d/%d berhasil", len(results), total)
     return results
 
 
@@ -232,7 +232,7 @@ def _add_book_label_to_cell(
     """
     Isi cell dengan label buku:
         ┌──────────────────────┐
-        │  [   BARCODE PNG   ] │
+        │     [ QR CODE ]      │
         │  BK-2025-0001        │
         │  Judul Buku...       │
         │  Pengarang           │  ← jika show_author=True
@@ -246,7 +246,7 @@ def _add_book_label_to_cell(
     _set_cell_bg(cell, "FFFFFF")
     _set_cell_margin(cell, top=60, bottom=60, left=80, right=80)
 
-    # ── Gambar barcode ────────────────────────────────────────────────────────
+    # ── Gambar QR Code ────────────────────────────────────────────────────────
     p_bc = cell.paragraphs[0]
     p_bc.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_bc.paragraph_format.space_before = Pt(0)
@@ -254,9 +254,11 @@ def _add_book_label_to_cell(
 
     if barcode_path and barcode_path.exists():
         run_bc = p_bc.add_run()
-        run_bc.add_picture(str(barcode_path), width=Cm(4.5))
+        # QR persegi → lebih kecil dari lebar wide-barcode lama (4.5cm) agar
+        # muat proporsional dalam tinggi label 3.5cm bersama teks di bawahnya.
+        run_bc.add_picture(str(barcode_path), width=Cm(2.6))
     else:
-        r_na = p_bc.add_run("[no barcode]")
+        r_na = p_bc.add_run("[no QR]")
         r_na.font.size = Pt(7)
         r_na.font.color.rgb = RGBColor(0xAA, 0xAA, 0xAA)
 

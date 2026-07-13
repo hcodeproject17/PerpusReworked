@@ -7,9 +7,10 @@ mesin decode. Dipilih menggantikan pyzbar karena zxing-cpp adalah wheel
 mandiri (tidak butuh DLL zbar eksternal seperti pyzbar di Windows),
 lebih cepat, dan mendukung lebih banyak format barcode/QR.
 
-Mendukung beberapa format sekaligus (mis. Code128 untuk label buku +
-QRCode untuk kartu anggota) via BARCODE_TYPE_FILTER berisi daftar
-dipisah koma, contoh: "CODE128,QRCODE".
+Default BARCODE_TYPE_FILTER di config.py adalah "QRCODE" saja — kartu
+anggota dan label buku sama-sama QR Code sekarang. Format lain tetap bisa
+diaktifkan lewat daftar dipisah koma (mis. "CODE128,QRCODE") kalau suatu
+saat perlu baca barcode linear juga (mis. ISBN cetakan penerbit).
 """
 
 import logging

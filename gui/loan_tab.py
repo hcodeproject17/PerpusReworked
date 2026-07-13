@@ -12,6 +12,14 @@ Panel:
   2. Kembalikan     — scan/cari buku aktif → lihat denda → konfirmasi
   3. Sedang Dipinjam— tabel semua transaksi aktif + highlight terlambat
   4. Riwayat        — semua transaksi dengan filter status + search
+
+Scan barcode/QR:
+  Kamera global (yang sama dipakai di halaman Kunjungan) tetap aktif
+  membaca frame di background lewat ScannerThread. Saat halaman
+  Peminjaman ini yang sedang ditampilkan, MainWindow._handle_barcode()
+  meneruskan tiap kode terbaca ke LoanTab.handle_scanned_code(), yang
+  merutekannya ke panel Pinjam/Kembalikan yang sedang aktif. Lihat
+  PinjamPanel.handle_scan() dan KembalikanPanel.handle_scan().
 """
 
 from __future__ import annotations
@@ -160,6 +168,10 @@ class MemberSearchWidget(QWidget):
         m = item.data(Qt.ItemDataRole.UserRole)
         if not m:
             return
+        self.select_member(m)
+
+    def select_member(self, m: dict):
+        """Pilih anggota langsung dari dict (dipakai juga oleh hasil scan barcode/QR)."""
         self._member = m
         self.inp.setText(f"{m['Nama']}  ({m['ID Barcode']})")
         self.lbl_info.setText(f"✓ Anggota dipilih: {m['Nama']}")
@@ -233,6 +245,10 @@ class BookSearchWidget(QWidget):
         b = item.data(Qt.ItemDataRole.UserRole)
         if not b:
             return
+        self.select_book(b)
+
+    def select_book(self, b: dict):
+        """Pilih buku langsung dari dict (dipakai juga oleh hasil scan barcode/QR)."""
         self._book = b
         self.inp.setText(f"{b['judul']}  [{b['kode_buku']}]")
         tersedia = b.get("jumlah_tersedia", 0)
@@ -420,6 +436,37 @@ class PinjamPanel(QWidget):
         self._inp_catatan.clear()
         self._preview.setVisible(False)
 
+    # ── Scan barcode/QR (dari kamera global MainWindow) ─────────────────────────
+
+    def handle_scan(self, code: str) -> None:
+        """
+        Terima satu kode hasil scan (Code128 label buku ATAU QR kartu anggota).
+        Urutan scan bebas — dicocokkan dulu ke anggota, baru ke buku, mengisi
+        field mana pun yang masih kosong. Tidak menimpa field yang sudah terisi.
+        """
+        code = code.strip()
+        if not code:
+            return
+
+        if self._member is None:
+            member = find_by_barcode(code)
+            if member:
+                self._member_search.select_member(member)
+                self.status_message.emit(f"✓ Anggota terdeteksi dari scan: {member['Nama']}", "success")
+                return
+
+        if self._book is None:
+            book = get_book_by_kode(code)
+            if book:
+                self._book_search.select_book(book)
+                self.status_message.emit(f"✓ Buku terdeteksi dari scan: {book['judul']}", "success")
+                return
+
+        if self._member is not None and self._book is not None:
+            self.status_message.emit("Anggota & buku sudah terisi — tekan Reset untuk scan transaksi baru.", "warning")
+        else:
+            self.status_message.emit(f"Kode '{code}' tidak dikenali (bukan anggota/buku terdaftar).", "warning")
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Panel 2: Kembalikan Buku
@@ -519,6 +566,19 @@ class KembalikanPanel(QWidget):
             return
         loans = search_loans(text, status_filter="dipinjam")
         self._fill_cari(loans)
+
+    def handle_scan(self, code: str) -> None:
+        """Terima kode hasil scan (barcode buku atau QR kartu anggota) dan
+        cari transaksi peminjaman aktif yang cocok. Auto-pilih jika hasilnya
+        persis satu baris, supaya alur scan → konfirmasi jadi satu langkah."""
+        code = code.strip()
+        if not code:
+            return
+        self._inp_cari.setText(code)   # textChanged akan memicu _on_search()
+        if self._tbl_cari.rowCount() == 1:
+            self._tbl_cari.selectRow(0)
+        elif self._tbl_cari.rowCount() == 0:
+            self.status_message.emit(f"Kode '{code}' tidak cocok dengan transaksi aktif mana pun.", "warning")
 
     def _load_active(self):
         loans = get_active_loans()
@@ -954,6 +1014,21 @@ class LoanTab(QWidget):
             self._panel_aktif.load_data()
         elif key == "riwayat":
             self._panel_riwayat._do_search()
+
+    def handle_scanned_code(self, code: str) -> None:
+        """
+        Entry point dipanggil MainWindow saat kamera global mendeteksi
+        barcode/QR SELAGI tab Peminjaman sedang aktif. Diteruskan ke panel
+        yang sedang ditampilkan (Pinjam atau Kembalikan); diabaikan kalau
+        panel lain (Aktif/Riwayat) yang sedang dibuka.
+        """
+        idx = self._stack.currentIndex()
+        if idx == 0:
+            self._panel_pinjam.handle_scan(code)
+        elif idx == 1:
+            self._panel_kembali.handle_scan(code)
+        else:
+            self._log(f"Scan '{code}' diabaikan — buka panel Pinjam/Kembalikan dulu.", "warning")
 
     def _on_refresh_needed(self):
         self._refresh_stats()

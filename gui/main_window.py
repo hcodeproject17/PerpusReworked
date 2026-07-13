@@ -54,6 +54,7 @@ from database.excel_reader import (
     read_source_excel,
 )
 from gui.card_tab import CardTab
+from gui.member_tab import MemberTab
 from gui.analytics_tab import AnalyticsTab
 from gui.loan_tab import LoanTab
 from gui.settings_dialog import SettingsDialog
@@ -134,19 +135,23 @@ class MainWindow(QMainWindow):
         self._tab_card = CardTab()
         self._stack.addWidget(self._tab_card)
 
-        # Halaman 3: Barcode Buku
+        # Halaman 3: Daftar Anggota
+        self._member_tab = MemberTab()
+        self._stack.addWidget(self._member_tab)
+
+        # Halaman 4: Barcode Buku
         self._book_barcode_tab = BookBarcodeTab()
         self._stack.addWidget(self._book_barcode_tab)
 
-        # Halaman 4: Analisis
+        # Halaman 5: Analisis
         self._tab_analytics = AnalyticsTab()
         self._stack.addWidget(self._tab_analytics)
 
-        # Halaman 5: Buku
+        # Halaman 6: Buku
         self._book_tab = BookTab()
         self._stack.addWidget(self._book_tab)
 
-        # Halaman 6: Peminjaman
+        # Halaman 7: Peminjaman
         self._loan_tab = LoanTab()
         self._stack.addWidget(self._loan_tab)
 
@@ -170,10 +175,11 @@ class MainWindow(QMainWindow):
     _NAV_ITEMS = [
         ("📷", "Kunjungan",     "1"),
         ("📇", "Cetak Kartu",   "2"),
-        ("🏷",  "Barcode Buku", "3"),
-        ("📊", "Analisis",      "4"),
-        ("📘", "Buku",          "5"),
-        ("📖", "Peminjaman",    "6"),
+        ("👥", "Anggota",       "3"),
+        ("🏷",  "Barcode Buku", "4"),
+        ("📊", "Analisis",      "5"),
+        ("📘", "Buku",          "6"),
+        ("📖", "Peminjaman",    "7"),
     ]
 
     def _make_sidebar(self) -> QWidget:
@@ -548,7 +554,21 @@ class MainWindow(QMainWindow):
     # Logika barcode & kunjungan
     # ══════════════════════════════════════════════════════════════════════════
 
+    # Indeks halaman "Peminjaman" di self._stack — harus sinkron dengan urutan
+    # penambahan widget di _build_ui() dan urutan _NAV_ITEMS.
+    _PAGE_PEMINJAMAN = 6
+
     def _handle_barcode(self, barcode_id: str) -> None:
+        # Kamera scan berjalan terus di background (ScannerThread) terlepas
+        # dari halaman yang sedang ditampilkan. Saat pengguna berada di
+        # halaman Peminjaman, arahkan hasil scan ke sana (isi field
+        # anggota/buku atau cari transaksi pengembalian) alih-alih mencatat
+        # kunjungan — supaya satu kamera bisa dipakai baik untuk absensi
+        # maupun sirkulasi peminjaman.
+        if self._stack.currentIndex() == self._PAGE_PEMINJAMAN:
+            self._loan_tab.handle_scanned_code(barcode_id)
+            return
+
         member = find_by_barcode(barcode_id)
         if member is None:
             self._log(f"Barcode tidak terdaftar: {barcode_id}", "error")
