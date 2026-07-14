@@ -27,16 +27,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-import qrcode
-from qrcode.constants import ERROR_CORRECT_M
 from docx import Document
 from docx.shared import Cm, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_ALIGN_VERTICAL
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
 
 from config import BASE_DIR
+from core.label_utils import set_cell_border, set_cell_bg, set_cell_margin, make_qr_png
 
 logger = logging.getLogger(__name__)
 
@@ -57,41 +54,6 @@ LABELS_PER_ROW   = 3   # 3 label per baris di halaman A4
 def _ensure_dirs(barcode_dir: Path, label_dir: Path) -> None:
     barcode_dir.mkdir(parents=True, exist_ok=True)
     label_dir.mkdir(parents=True, exist_ok=True)
-
-
-def _set_cell_border(cell, sides=None, color="BBBBBB", sz="4") -> None:
-    if sides is None:
-        sides = ["top", "left", "bottom", "right"]
-    tcPr = cell._tc.get_or_add_tcPr()
-    tcBorders = OxmlElement("w:tcBorders")
-    for side in sides:
-        el = OxmlElement(f"w:{side}")
-        el.set(qn("w:val"),   "single")
-        el.set(qn("w:sz"),    sz)
-        el.set(qn("w:space"), "0")
-        el.set(qn("w:color"), color)
-        tcBorders.append(el)
-    tcPr.append(tcBorders)
-
-
-def _set_cell_bg(cell, hex_color: str) -> None:
-    tcPr = cell._tc.get_or_add_tcPr()
-    shd  = OxmlElement("w:shd")
-    shd.set(qn("w:val"),   "clear")
-    shd.set(qn("w:color"), "auto")
-    shd.set(qn("w:fill"),  hex_color)
-    tcPr.append(shd)
-
-
-def _set_cell_margin(cell, top=60, bottom=60, left=80, right=80) -> None:
-    tcPr  = cell._tc.get_or_add_tcPr()
-    tcMar = OxmlElement("w:tcMar")
-    for side, val in [("top", top), ("bottom", bottom), ("left", left), ("right", right)]:
-        el = OxmlElement(f"w:{side}")
-        el.set(qn("w:w"),    str(val))
-        el.set(qn("w:type"), "dxa")
-        tcMar.append(el)
-    tcPr.append(tcMar)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -195,17 +157,7 @@ def generate_book_barcode_images(
         out_path = barcode_dir / f"{safe}.png"
 
         try:
-            qr = qrcode.QRCode(
-                version=None,                     # ukuran otomatis mengikuti panjang kode
-                error_correction=ERROR_CORRECT_M,  # toleransi ~15% kerusakan (noda/lipatan)
-                box_size=15,                       # resolusi per modul → hasil tajam saat dicetak
-                border=3,                          # quiet zone wajib agar mudah discan
-            )
-            qr.add_data(kode)
-            qr.make(fit=True)
-            img = qr.make_image(fill_color="black", back_color="white")
-            img.save(str(out_path))
-
+            make_qr_png(kode, out_path)
             results[kode] = out_path
             logger.debug("QR Code buku: %s → %s", kode, out_path.name)
 
@@ -242,9 +194,9 @@ def _add_book_label_to_cell(
         p.clear()
 
     cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    _set_cell_border(cell, color="999999", sz="6")
-    _set_cell_bg(cell, "FFFFFF")
-    _set_cell_margin(cell, top=60, bottom=60, left=80, right=80)
+    set_cell_border(cell, color="999999", sz="6")
+    set_cell_bg(cell, "FFFFFF")
+    set_cell_margin(cell, top=60, bottom=60, left=80, right=80)
 
     # ── Gambar QR Code ────────────────────────────────────────────────────────
     p_bc = cell.paragraphs[0]

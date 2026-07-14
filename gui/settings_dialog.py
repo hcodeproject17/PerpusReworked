@@ -150,7 +150,7 @@ class SettingsDialog(QDialog):
 
         self._input_school = QLineEdit()
         self._input_school.setObjectName("settingsInput")
-        self._input_school.setPlaceholderText("mis. MTs Negeri 12 Cirebon")
+        self._input_school.setPlaceholderText("mis. MTs Negeri 0 Pemancingan")
         form.addRow(self._field_label("Nama sekolah / instansi default"), self._input_school)
 
         hint = QLabel("Dipakai sebagai nilai awal saat mencetak kartu anggota massal.")

@@ -17,8 +17,6 @@ from typing import Optional
 
 import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
-import qrcode
-from qrcode.constants import ERROR_CORRECT_M
 from docx import Document
 from docx.shared import Cm, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -33,6 +31,7 @@ from config import (
     EXCEL_COL_NAME,
 )
 from database.excel_reader import invalidate_cache
+from core.label_utils import set_cell_border, set_cell_bg, set_cell_margin, make_qr_png
 
 logger = logging.getLogger(__name__)
 
@@ -311,17 +310,7 @@ def generate_barcode_images(
         out_path   = barcode_dir / f"{safe_name}.png"
 
         try:
-            qr = qrcode.QRCode(
-                version=None,                     # ukuran otomatis mengikuti panjang ID
-                error_correction=ERROR_CORRECT_M,  # toleransi ~15% kerusakan (noda/lipatan)
-                box_size=15,                       # resolusi per modul → hasil tajam saat dicetak
-                border=3,                          # quiet zone wajib agar mudah discan
-            )
-            qr.add_data(barcode_id)
-            qr.make(fit=True)
-            img = qr.make_image(fill_color="black", back_color="white")
-            img.save(str(out_path))
-
+            make_qr_png(barcode_id, out_path)
             results[barcode_id] = out_path
             logger.debug("QR Code PNG: %s → %s", barcode_id, out_path.name)
 
@@ -338,61 +327,6 @@ def generate_barcode_images(
 # ══════════════════════════════════════════════════════════════════════════════
 # Step 4: Generate .docx kartu massal
 # ══════════════════════════════════════════════════════════════════════════════
-
-def _set_cell_border(cell, sides=None, color="AAAAAA", sz="6") -> None:
-    """Set border pada cell tabel Word."""
-    if sides is None:
-        sides = ["top", "left", "bottom", "right"]
-    tcPr = cell._tc.get_or_add_tcPr()
-    tcBorders = OxmlElement("w:tcBorders")
-    for side in sides:
-        el = OxmlElement(f"w:{side}")
-        el.set(qn("w:val"),   "single")
-        el.set(qn("w:sz"),    sz)
-        el.set(qn("w:space"), "0")
-        el.set(qn("w:color"), color)
-        tcBorders.append(el)
-    tcPr.append(tcBorders)
-
-
-def _set_cell_bg(cell, hex_color: str) -> None:
-    """Set background warna cell."""
-    tcPr = cell._tc.get_or_add_tcPr()
-    shd  = OxmlElement("w:shd")
-    shd.set(qn("w:val"),   "clear")
-    shd.set(qn("w:color"), "auto")
-    shd.set(qn("w:fill"),  hex_color)
-    tcPr.append(shd)
-
-
-def _set_cell_margin(cell, top=60, bottom=60, left=80, right=80) -> None:
-    """Set margin dalam cell (dalam twips, 1cm ≈ 567 twips)."""
-    tcPr  = cell._tc.get_or_add_tcPr()
-    tcMar = OxmlElement("w:tcMar")
-    for side, val in [("top", top), ("bottom", bottom), ("left", left), ("right", right)]:
-        el = OxmlElement(f"w:{side}")
-        el.set(qn("w:w"),    str(val))
-        el.set(qn("w:type"), "dxa")
-        tcMar.append(el)
-    tcPr.append(tcMar)
-
-
-def _para(cell_or_table, text: str, size_pt: float,
-          bold=False, color="1a1a1a",
-          align=WD_ALIGN_PARAGRAPH.LEFT,
-          space_before=0, space_after=0,
-          italic=False) -> None:
-    """Tambah paragraf ke cell dengan format tertentu."""
-    para = cell_or_table.add_paragraph()
-    para.alignment = align
-    para.paragraph_format.space_before = Pt(space_before)
-    para.paragraph_format.space_after  = Pt(space_after)
-    run = para.add_run(text)
-    run.bold       = bold
-    run.italic     = italic
-    run.font.size  = Pt(size_pt)
-    run.font.color.rgb = RGBColor.from_string(color)
-
 
 def _add_card_to_cell(
     outer_cell,
@@ -417,8 +351,8 @@ def _add_card_to_cell(
     outer_cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
 
     # Border luar kartu (tebal)
-    _set_cell_border(outer_cell, color="888888", sz="8")
-    _set_cell_margin(outer_cell, top=0, bottom=0, left=0, right=0)
+    set_cell_border(outer_cell, color="888888", sz="8")
+    set_cell_margin(outer_cell, top=0, bottom=0, left=0, right=0)
 
     # ── Buat nested table 2 baris × 1 kolom di dalam outer_cell ──────────────
     # Baris 1: header (full width)
@@ -442,9 +376,9 @@ def _add_card_to_cell(
     # ── Baris 1: Header ───────────────────────────────────────────────────────
     header_cell = nested.cell(0, 0)
     header_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    _set_cell_bg(header_cell, "FFFFFF")
-    _set_cell_margin(header_cell, top=80, bottom=40, left=100, right=100)
-    _set_cell_border(header_cell, sides=["bottom"], color="888888", sz="6")
+    set_cell_bg(header_cell, "FFFFFF")
+    set_cell_margin(header_cell, top=80, bottom=40, left=100, right=100)
+    set_cell_border(header_cell, sides=["bottom"], color="888888", sz="6")
 
     # Kosongkan paragraf default
     for p in header_cell.paragraphs:
@@ -472,8 +406,8 @@ def _add_card_to_cell(
 
     # ── Baris 2: Info + Barcode ───────────────────────────────────────────────
     body_cell = nested.cell(1, 0)
-    _set_cell_bg(body_cell, "FFFFFF")
-    _set_cell_margin(body_cell, top=0, bottom=0, left=0, right=0)
+    set_cell_bg(body_cell, "FFFFFF")
+    set_cell_margin(body_cell, top=0, bottom=0, left=0, right=0)
 
     # Inner table 1×2 di dalam body_cell
     inner = body_cell.add_table(rows=1, cols=2)
@@ -503,8 +437,8 @@ def _add_card_to_cell(
     # ── Sel kiri: nama + id ───────────────────────────────────────────────────
     left_cell = inner.cell(0, 0)
     left_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    _set_cell_margin(left_cell, top=80, bottom=80, left=100, right=60)
-    _set_cell_border(left_cell, sides=["right"], color="AAAAAA", sz="4")
+    set_cell_margin(left_cell, top=80, bottom=80, left=100, right=60)
+    set_cell_border(left_cell, sides=["right"], color="AAAAAA", sz="4")
 
     for p in left_cell.paragraphs:
         p.clear()
@@ -546,7 +480,7 @@ def _add_card_to_cell(
     # ── Sel kanan: gambar barcode ─────────────────────────────────────────────
     right_cell = inner.cell(0, 1)
     right_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    _set_cell_margin(right_cell, top=60, bottom=60, left=60, right=60)
+    set_cell_margin(right_cell, top=60, bottom=60, left=60, right=60)
 
     for p in right_cell.paragraphs:
         p.clear()
