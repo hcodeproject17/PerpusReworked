@@ -46,6 +46,7 @@ from PySide6.QtCharts import (
 )
 
 from theme import get_palette, log_colors as _log_colors
+from gui.widgets import section_label as _section_label
 
 logger = logging.getLogger(__name__)
 
@@ -250,12 +251,6 @@ def _scrollable(widget: QWidget) -> QScrollArea:
     sa.setWidget(widget)
     sa.setObjectName("analyticsScroll")
     return sa
-
-
-def _section_label(text: str) -> QLabel:
-    lbl = QLabel(text)
-    lbl.setObjectName("analyticsSectionLabel")
-    return lbl
 
 
 def _make_table(cols: list[str]) -> QTableWidget:

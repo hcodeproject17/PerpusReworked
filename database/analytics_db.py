@@ -10,16 +10,15 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Optional
 
-from config import DATABASE_PATH, MEMBER_EXCEL_PATH, EXCEL_COL_BARCODE, EXCEL_COL_NAME
+from config import MEMBER_EXCEL_PATH, EXCEL_COL_BARCODE, EXCEL_COL_NAME
+from database.connection import get_connection
 import openpyxl
 
 logger = logging.getLogger(__name__)
 
 
 def _conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(DATABASE_PATH))
-    conn.row_factory = sqlite3.Row
-    return conn
+    return get_connection(wal=False, foreign_keys=False)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

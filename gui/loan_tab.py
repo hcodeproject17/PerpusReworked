@@ -48,6 +48,7 @@ from database.settings_db import get_denda_per_hari, get_durasi_pinjam
 from database.book_db import get_book_by_kode, search_books
 from database.excel_reader import find_by_barcode, search as search_members
 from theme import get_palette
+from gui.widgets import section_label as _section_label
 
 logger = logging.getLogger(__name__)
 
@@ -81,12 +82,6 @@ class _LoadLoansWorker(QThread):
 # ══════════════════════════════════════════════════════════════════════════════
 # Komponen kecil
 # ══════════════════════════════════════════════════════════════════════════════
-
-def _section_label(text: str) -> QLabel:
-    lbl = QLabel(text)
-    lbl.setObjectName("analyticsSectionLabel")
-    return lbl
-
 
 def _make_table(cols: list[str], stretch_col: int = 1) -> QTableWidget:
     t = QTableWidget()

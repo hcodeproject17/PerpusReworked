@@ -1,9 +1,6 @@
 """
 core/label_utils.py — Helper bersama untuk generator label docx (kartu
 anggota & label buku): styling cell tabel Word dan generate QR Code PNG.
-
-Diekstrak dari card_generator.py dan book_barcode_generator.py karena
-kedua file itu sebelumnya punya salinan identik dari fungsi-fungsi ini.
 """
 
 from pathlib import Path

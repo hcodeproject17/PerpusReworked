@@ -8,20 +8,11 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
-from config import DATABASE_PATH
 from database.loan_db import init_loan_db
+from database.connection import get_connection as _get_connection
 
 
 logger = logging.getLogger(__name__)
-
-
-def _get_connection() -> sqlite3.Connection:
-    """Buka koneksi SQLite dengan row_factory agar hasil bisa diakses sebagai dict."""
-    conn = sqlite3.connect(str(DATABASE_PATH))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")   # Lebih aman untuk akses bersamaan
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
 
 
 def init_db() -> None:
@@ -45,7 +36,7 @@ def init_db() -> None:
         with _get_connection() as conn:
             conn.executescript(ddl)
         logger.info("Database diinisialisasi.")
-        from database.book_db import init_book_db  # ← tambahkan
+        from database.book_db import init_book_db
         init_book_db()
         from database.settings_db import init_settings_db
         init_settings_db()

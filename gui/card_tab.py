@@ -1,7 +1,7 @@
 """
 gui/card_tab.py — Tab pembuatan kartu perpustakaan massal
 
-Layout kolom kiri (fixed 310px) — urutan alur UX yang benar:
+Layout kolom kiri (fixed 310px) — urutan alur UX:
   ┌─────────────┐
   │ 1. SUMBER   │  Upload file Excel
   ├─────────────┤

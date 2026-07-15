@@ -1,12 +1,11 @@
 """
 gui/settings_dialog.py — Jendela Pengaturan Aplikasi PerpusReworked
 
-Satu jendela konfigurasi terpusat untuk nilai-nilai yang sebelumnya
-tersebar sebagai konstanta hardcoded di seluruh kode (denda per hari,
-nama sekolah default, durasi pinjam, dst). Nilai disimpan lewat
-database/settings_db.py dan langsung berlaku di modul lain tanpa restart
-— kecuali perubahan tema warna, yang butuh restart karena stylesheet
-di-generate sekali di awal aplikasi (dicatat jelas di UI).
+Satu jendela konfigurasi terpusat untuk nilai-nilai yang bisa diubah
+tanpa restart (denda per hari, nama sekolah default, durasi pinjam, dst).
+Nilai disimpan lewat database/settings_db.py dan langsung berlaku di
+modul lain — kecuali perubahan tema warna, yang butuh restart karena
+stylesheet di-generate sekali di awal aplikasi (dicatat jelas di UI).
 
 Dipanggil dari gui/main_window.py lewat tombol ⚙ Pengaturan di sidebar.
 """

@@ -1,8 +1,8 @@
 """
 gui/main_window.py — Dashboard utama PerpusReworked
 Layout: sidebar navigasi persisten (kiri) + QStackedWidget konten (kanan),
-menggantikan tab horizontal lama agar semua menu selalu terlihat sekaligus
-dan area kerja tabel data mendapat lebar maksimum.
+agar semua menu selalu terlihat sekaligus dan area kerja tabel data
+mendapat lebar maksimum.
 """
 
 import logging

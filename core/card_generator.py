@@ -286,8 +286,8 @@ def generate_barcode_images(
 ) -> dict[str, Path]:
     """
     Generate gambar QR Code PNG untuk setiap anggota.
-    (Nama fungsi/parameter dipertahankan "barcode_*" untuk kompatibilitas
-    dengan pemanggil lain, meski isinya sekarang QR Code.)
+    (Fungsi/parameter tetap pakai awalan "barcode_" untuk konsistensi
+    penamaan di modul ini.)
 
     Args:
         members_with_id : list hasil assign_barcode_ids()

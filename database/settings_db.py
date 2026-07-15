@@ -22,7 +22,7 @@ import sqlite3
 import logging
 from typing import Any
 
-from config import DATABASE_PATH
+from database.connection import get_connection
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +37,7 @@ DEFAULTS: dict[str, str] = {
 
 
 def _get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(DATABASE_PATH))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+    return get_connection(foreign_keys=False)
 
 
 def init_settings_db() -> None:

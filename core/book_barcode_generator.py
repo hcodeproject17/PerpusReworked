@@ -14,12 +14,11 @@ Format label per buku:
     │  Pengarang             │  ← opsional
     └────────────────────────┘
 
-Catatan: sebelumnya modul ini men-generate barcode Code 128 (python-barcode).
-Sejak aplikasi belum dirilis, format label diseragamkan penuh ke QR Code —
-selaras dengan kartu anggota (core/card_generator.py) dan filter scanner
-di config.py (BARCODE_TYPE_FILTER = "QRCODE"). QR dipilih karena jauh
-lebih toleran terhadap sudut/pencahayaan saat dibaca lewat webcam
-dibanding barcode linear, dan alat pemindai USB 2D kini cukup terjangkau.
+QR Code dipilih untuk label buku karena jauh lebih toleran terhadap
+sudut/pencahayaan saat dibaca lewat webcam dibanding barcode linear, dan
+alat pemindai USB 2D kini cukup terjangkau. Selaras dengan kartu anggota
+(core/card_generator.py) dan filter scanner di config.py
+(BARCODE_TYPE_FILTER = "QRCODE").
 """
 
 import logging
@@ -132,9 +131,8 @@ def generate_book_barcode_images(
 ) -> dict[str, Path]:
     """
     Generate gambar QR Code PNG untuk setiap buku.
-    (Nama fungsi/parameter dipertahankan "barcode_*" untuk kompatibilitas
-    dengan pemanggil lain, meski isinya sekarang QR Code — sama seperti
-    core/card_generator.py untuk kartu anggota.)
+    (Parameter/nama fungsi tetap pakai awalan "barcode_" untuk konsistensi
+    dengan core/card_generator.py.)
 
     Args:
         books       : list hasil fetch_books()

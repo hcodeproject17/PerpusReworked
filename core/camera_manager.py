@@ -1,7 +1,7 @@
 """
 core/camera_manager.py — Manager kamera dengan threaded VideoStream
 
-Pola dari file lama user diadaptasi ke class-based + thread-safe:
+Arsitektur:
 - Thread kamera baca frame terus-menerus di background
 - Main thread hanya ambil frame terbaru dari buffer (tidak blocking)
 - Thread scanner terpisah untuk decode barcode (tidak ganggu display)
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# VideoStream — thread baca frame terus-menerus (dari pola file lama user)
+# VideoStream — thread baca frame terus-menerus
 # ══════════════════════════════════════════════════════════════════════════════
 
 class VideoStream:

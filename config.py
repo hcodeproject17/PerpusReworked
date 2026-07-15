@@ -51,10 +51,8 @@ CAMERA_FPS: int            = 30
 
 # ── Barcode scanner ───────────────────────────────────────────────────────────
 BARCODE_DEBOUNCE_SECONDS: float = 2.0   # Jeda minimum antar scan barcode sama
-# Semua label (kartu anggota & label buku) sekarang QR Code — lihat
-# core/card_generator.py dan core/book_barcode_generator.py. Kalau nanti ada
-# kebutuhan baca Code128 lagi (mis. barcode ISBN cetakan penerbit), tambahkan
-# balik jadi "CODE128,QRCODE".
+# Format barcode/QR yang dicari scanner. Pisahkan dengan koma untuk beberapa
+# format sekaligus, mis. "CODE128,QRCODE".
 BARCODE_TYPE_FILTER: str        = "QRCODE"
 
 # ── GUI ───────────────────────────────────────────────────────────────────────

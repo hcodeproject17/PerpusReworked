@@ -3,14 +3,11 @@ core/barcode_scanner.py — Deteksi barcode/QR dari frame OpenCV
 dengan mekanisme debounce per kode.
 
 Menggunakan zxing-cpp (bindings Python untuk pustaka C++ ZXing) sebagai
-mesin decode. Dipilih menggantikan pyzbar karena zxing-cpp adalah wheel
-mandiri (tidak butuh DLL zbar eksternal seperti pyzbar di Windows),
-lebih cepat, dan mendukung lebih banyak format barcode/QR.
+mesin decode: wheel mandiri (tidak butuh DLL zbar eksternal di Windows),
+cepat, dan mendukung banyak format barcode/QR sekaligus.
 
-Default BARCODE_TYPE_FILTER di config.py adalah "QRCODE" saja — kartu
-anggota dan label buku sama-sama QR Code sekarang. Format lain tetap bisa
-diaktifkan lewat daftar dipisah koma (mis. "CODE128,QRCODE") kalau suatu
-saat perlu baca barcode linear juga (mis. ISBN cetakan penerbit).
+Format yang dicari diatur lewat BARCODE_TYPE_FILTER di config.py, bisa
+satu tipe (mis. "QRCODE") atau beberapa dipisah koma (mis. "CODE128,QRCODE").
 """
 
 import logging
@@ -47,17 +44,14 @@ _FORMAT_MAP: dict[str, "zxingcpp.BarcodeFormat"] = {
 
 
 def _normalize_format_name(fmt: "zxingcpp.BarcodeFormat") -> str:
-    """Ubah enum format zxingcpp (mis. 'Code 128') menjadi string
-    gaya pyzbar tanpa spasi (mis. 'CODE128') agar konsisten dengan
-    nilai BARCODE_TYPE_FILTER di config.py."""
+    """Ubah enum format zxingcpp (mis. 'Code 128') menjadi string tanpa
+    spasi (mis. 'CODE128') agar konsisten dengan BARCODE_TYPE_FILTER."""
     return str(fmt).upper().replace(" ", "")
 
 
 def _bbox_from_position(position: "zxingcpp.Position") -> tuple[int, int, int, int]:
-    """zxing-cpp mengembalikan 4 titik sudut (bisa miring/rotasi),
-    sedangkan pyzbar mengembalikan rect axis-aligned langsung.
-    Fungsi ini menghitung bounding box axis-aligned dari 4 titik
-    tersebut supaya draw_overlay() tetap kompatibel."""
+    """Konversi 4 titik sudut (bisa miring/rotasi) dari zxing-cpp menjadi
+    bounding box axis-aligned (x, y, w, h) untuk dipakai draw_overlay()."""
     xs = (position.top_left.x, position.top_right.x,
           position.bottom_right.x, position.bottom_left.x)
     ys = (position.top_left.y, position.top_right.y,
@@ -91,16 +85,14 @@ class BarcodeScanner:
         self._debounce = debounce_seconds
 
         # Pecah filter dipisah koma, mis. "CODE128,QRCODE" → {"CODE128", "QRCODE"}
-        # Backward-compatible: filter tunggal seperti dulu ("CODE128") tetap jalan.
+        # Filter tunggal (mis. "CODE128") juga tetap didukung.
         raw_names = [t.strip().upper().replace(" ", "") for t in type_filter.split(",")]
         raw_names = [t for t in raw_names if t]
 
         self._type_filter_set: set[str] = set(raw_names)
 
-        # Gabungkan semua enum format yang dikenali dengan OR bitwise,
-        # supaya read_barcodes() mencari SEMUA format yang diminta sekaligus
-        # (bukan cuma satu) — ini yang tadinya jadi penyebab QR tidak pernah
-        # terdeteksi saat filter cuma "CODE128".
+        # Gabungkan semua enum format yang dikenali dengan OR bitwise, supaya
+        # read_barcodes() mencari SEMUA format yang diminta sekaligus.
         combined_format = None
         for name in raw_names:
             fmt = _FORMAT_MAP.get(name)

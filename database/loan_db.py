@@ -20,8 +20,8 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Optional
 
-from config import DATABASE_PATH
 from database import settings_db
+from database.connection import get_connection as _get_connection
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +32,6 @@ logger = logging.getLogger(__name__)
 DENDA_PER_HARI   = 500     # Rupiah per hari keterlambatan (fallback)
 DURASI_PINJAM    = 7       # Hari pinjam default (fallback)
 MAX_PINJAM       = 3       # Maksimal buku dipinjam sekaligus per anggota (fallback)
-
-
-def _get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(DATABASE_PATH))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
 
 
 # ══════════════════════════════════════════════════════════════════════════════
