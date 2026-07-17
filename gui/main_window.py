@@ -131,29 +131,29 @@ class MainWindow(QMainWindow):
         self._build_visitor_tab(self._tab_visitor)
         self._stack.addWidget(self._tab_visitor)
 
-        # Halaman 2: Kartu Massal
-        self._tab_card = CardTab()
-        self._stack.addWidget(self._tab_card)
+        # Halaman 2: Analisis
+        self._tab_analytics = AnalyticsTab()
+        self._stack.addWidget(self._tab_analytics)
 
-        # Halaman 3: Daftar Anggota
+        # Halaman 3: Peminjaman
+        self._loan_tab = LoanTab()
+        self._stack.addWidget(self._loan_tab)
+
+        # Halaman 4: Daftar Anggota
         self._member_tab = MemberTab()
         self._stack.addWidget(self._member_tab)
 
-        # Halaman 4: Barcode Buku
-        self._book_barcode_tab = BookBarcodeTab()
-        self._stack.addWidget(self._book_barcode_tab)
-
-        # Halaman 5: Analisis
-        self._tab_analytics = AnalyticsTab()
-        self._stack.addWidget(self._tab_analytics)
+        # Halaman 5: Cetak Kartu
+        self._tab_card = CardTab()
+        self._stack.addWidget(self._tab_card)
 
         # Halaman 6: Buku
         self._book_tab = BookTab()
         self._stack.addWidget(self._book_tab)
 
-        # Halaman 7: Peminjaman
-        self._loan_tab = LoanTab()
-        self._stack.addWidget(self._loan_tab)
+        # Halaman 7: QRCode Buku
+        self._book_barcode_tab = BookBarcodeTab()
+        self._stack.addWidget(self._book_barcode_tab)
 
         work_row.addWidget(self._stack, stretch=1)
 
@@ -174,12 +174,12 @@ class MainWindow(QMainWindow):
     # (ikon, label, shortcut Ctrl+N) — urutan sama dengan urutan halaman di atas
     _NAV_ITEMS = [
         ("📷", "Kunjungan",     "1"),
-        ("📇", "Cetak Kartu",   "2"),
-        ("👥", "Anggota",       "3"),
-        ("🏷",  "Barcode Buku", "4"),
-        ("📊", "Analisis",      "5"),
+        ("📊", "Analisis",      "2"),
+        ("📖", "Peminjaman",    "3"),
+        ("👥", "Anggota",       "4"),
+        ("📇", "Cetak Kartu",   "5"),
         ("📘", "Buku",          "6"),
-        ("📖", "Peminjaman",    "7"),
+        ("🏷",  "QRCode Buku",  "7"),
     ]
 
     def _make_sidebar(self) -> QWidget:
@@ -556,7 +556,7 @@ class MainWindow(QMainWindow):
 
     # Indeks halaman "Peminjaman" di self._stack — harus sinkron dengan urutan
     # penambahan widget di _build_ui() dan urutan _NAV_ITEMS.
-    _PAGE_PEMINJAMAN = 6
+    _PAGE_PEMINJAMAN = 2
 
     def _handle_barcode(self, barcode_id: str) -> None:
         # Kamera scan berjalan terus di background (ScannerThread) terlepas

@@ -1,22 +1,22 @@
 """
-core/card_generator.py — Generator kartu perpustakaan massal
+core/card_generator.py — Generator kartu perpustakaan (QR Code) untuk
+anggota yang sudah terdaftar di anggota.xlsx.
 
 Alur:
-1. Upload Excel sumber (kolom: Nama, [opsional: Kelas, dll])
-2. Generate ID Barcode otomatis: "{YYYY}-{NNNN}" (contoh: 2025-0001)
-3. Simpan ke anggota.xlsx (append / buat baru)
-4. Generate gambar QR Code per anggota → folder barcode_images/
-5. Generate .docx berisi tabel kartu (N kartu per halaman) siap cetak
+1. Ambil anggota dari database/excel_reader.py (semua / filter / pilihan
+   manual dari tab Anggota — lihat gui/card_tab.py)
+2. Generate gambar QR Code per anggota → folder barcode_images/
+3. Generate .docx berisi tabel kartu (N kartu per halaman) siap cetak
+
+Pendaftaran anggota baru (termasuk assign ID Barcode & import massal
+Excel) ada di database/excel_reader.py, dipakai dari gui/member_tab.py.
 """
 
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-import openpyxl
-from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
 from docx import Document
 from docx.shared import Cm, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -24,13 +24,7 @@ from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
-from config import (
-    MEMBER_EXCEL_PATH,
-    BASE_DIR,
-    EXCEL_COL_BARCODE,
-    EXCEL_COL_NAME,
-)
-from database.excel_reader import invalidate_cache
+from config import BASE_DIR, EXCEL_COL_BARCODE, EXCEL_COL_NAME
 from core.label_utils import set_cell_border, set_cell_bg, set_cell_margin, make_qr_png
 
 logger = logging.getLogger(__name__)
@@ -54,229 +48,17 @@ def _ensure_dirs(barcode_dir: Path, cards_dir: Path) -> None:
     cards_dir.mkdir(parents=True, exist_ok=True)
 
 
-def _get_next_barcode_id(existing_ids: list[str], year: int) -> str:
-    """
-    Generate ID barcode berikutnya dalam format YYYY-NNNN.
-    Urutan number dilanjutkan dari ID terbesar yang sudah ada di tahun yang sama.
-    """
-    prefix = f"{year}-"
-    year_ids = [
-        int(bid[len(prefix):])
-        for bid in existing_ids
-        if bid.startswith(prefix) and bid[len(prefix):].isdigit()
-    ]
-    next_num = (max(year_ids) + 1) if year_ids else 1
-    return f"{year}-{next_num:04d}"
-
-
-def _load_existing_members() -> tuple[list[dict], list[str]]:
-    """
-    Baca anggota.xlsx yang sudah ada.
-    Returns: (list_rows, list_barcode_ids)
-    """
-    if not MEMBER_EXCEL_PATH.exists():
-        return [], []
-
-    wb = openpyxl.load_workbook(str(MEMBER_EXCEL_PATH))
-    ws = wb.active
-    headers = [str(c.value).strip() if c.value else "" for c in next(ws.iter_rows(max_row=1))]
-    rows = []
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        rec = dict(zip(headers, row))
-        if rec.get(EXCEL_COL_BARCODE) or rec.get(EXCEL_COL_NAME):
-            rows.append(rec)
-    wb.close()
-
-    existing_ids = [str(r[EXCEL_COL_BARCODE]).strip() for r in rows if r.get(EXCEL_COL_BARCODE)]
-    return rows, existing_ids
+def fetch_members(query: Optional[str] = None) -> list[dict]:
+    """Ambil data anggota dari anggota.xlsx untuk dipilih & dicetak kartunya."""
+    from database.excel_reader import load_members, search as search_members
+    try:
+        return search_members(query) if query else load_members()
+    except FileNotFoundError:
+        return []
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Step 1: Baca file Excel sumber (daftar nama)
-# ══════════════════════════════════════════════════════════════════════════════
-
-def read_source_excel(path: str | Path) -> list[dict]:
-    """
-    Baca file Excel sumber yang diupload user.
-    Kolom wajib: 'Nama'
-    Kolom opsional tambahan akan ikut disimpan.
-
-    Returns:
-        list of dict — data anggota baru (belum ada barcode)
-    Raises:
-        FileNotFoundError, ValueError
-    """
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"File tidak ditemukan: {path}")
-
-    wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
-    ws = wb.active
-    headers = [str(c.value).strip() if c.value else "" for c in next(ws.iter_rows(max_row=1))]
-
-    if "Nama" not in headers:
-        wb.close()
-        raise ValueError(
-            f"Kolom 'Nama' tidak ditemukan. Kolom tersedia: {headers}"
-        )
-
-    members = []
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        rec = dict(zip(headers, row))
-        nama = str(rec.get("Nama", "")).strip()
-        if not nama or nama.lower() == "none":
-            continue
-        rec["Nama"] = nama
-        members.append(rec)
-
-    wb.close()
-    logger.info("Sumber Excel dibaca: %d anggota baru dari %s", len(members), path.name)
-    return members
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Step 2: Assign barcode ID & update anggota.xlsx
-# ══════════════════════════════════════════════════════════════════════════════
-
-def assign_barcode_ids(
-    new_members: list[dict],
-    year: Optional[int] = None,
-    id_column: Optional[str] = None,
-) -> tuple[list[dict], list[str]]:
-    """
-    Assign ID Barcode ke setiap anggota baru.
-
-    Mode 1 — Generate otomatis (id_column=None):
-        Format: YYYY-NNNN, dilanjutkan dari ID terbesar di anggota.xlsx.
-
-    Mode 2 — Kolom kustom (id_column="NISN" atau kolom lain):
-        Ambil nilai dari kolom tersebut sebagai ID Barcode.
-        Baris dengan nilai kosong akan dilewati dan dilaporkan sebagai warning.
-
-    Args:
-        new_members : list dari read_source_excel()
-        year        : tahun untuk prefix ID (Mode 1 saja)
-        id_column   : nama kolom sumber ID kustom (Mode 2)
-
-    Returns:
-        tuple (members_with_id, warnings)
-        - members_with_id : list[dict] dengan key EXCEL_COL_BARCODE terisi
-        - warnings        : list[str] baris yang dilewati karena ID kosong/duplikat
-    """
-    if year is None:
-        year = datetime.now().year
-
-    _, existing_ids = _load_existing_members()
-    existing_id_set = set(existing_ids)
-    result   = []
-    warnings = []
-
-    if id_column is None:
-        # ── Mode 1: generate otomatis ─────────────────────────────────────────
-        current_ids = list(existing_ids)
-        for member in new_members:
-            barcode_id = _get_next_barcode_id(current_ids, year)
-            member[EXCEL_COL_BARCODE] = barcode_id
-            current_ids.append(barcode_id)
-            existing_id_set.add(barcode_id)
-            result.append(member)
-            logger.debug("Assign ID otomatis: %s → %s", member.get("Nama", ""), barcode_id)
-    else:
-        # ── Mode 2: pakai kolom kustom ────────────────────────────────────────
-        seen_in_batch = set()
-        for member in new_members:
-            raw = member.get(id_column, "")
-            barcode_id = str(raw).strip() if raw is not None else ""
-
-            nama = member.get("Nama", "(tanpa nama)")
-
-            if not barcode_id or barcode_id.lower() == "none":
-                msg = f"Dilewati — kolom '{id_column}' kosong untuk: {nama}"
-                warnings.append(msg)
-                logger.warning(msg)
-                continue
-
-            if barcode_id in existing_id_set:
-                msg = f"Dilewati — ID '{barcode_id}' sudah ada di anggota.xlsx: {nama}"
-                warnings.append(msg)
-                logger.warning(msg)
-                continue
-
-            if barcode_id in seen_in_batch:
-                msg = f"Dilewati — ID '{barcode_id}' duplikat dalam file sumber: {nama}"
-                warnings.append(msg)
-                logger.warning(msg)
-                continue
-
-            member[EXCEL_COL_BARCODE] = barcode_id
-            seen_in_batch.add(barcode_id)
-            existing_id_set.add(barcode_id)
-            result.append(member)
-            logger.debug("Assign ID kustom: %s → %s", nama, barcode_id)
-
-    return result, warnings
-
-
-def save_to_member_excel(members_with_id: list[dict]) -> int:
-    """
-    Append anggota baru ke anggota.xlsx.
-    Jika file belum ada, buat baru dengan header.
-
-    Returns:
-        Jumlah baris yang berhasil ditambahkan
-    """
-    # Kumpulkan semua header yang ada di data baru
-    all_keys = [EXCEL_COL_BARCODE, EXCEL_COL_NAME]
-    for m in members_with_id:
-        for k in m.keys():
-            if k not in all_keys:
-                all_keys.append(k)
-
-    if MEMBER_EXCEL_PATH.exists():
-        wb = openpyxl.load_workbook(str(MEMBER_EXCEL_PATH))
-        ws = wb.active
-        # Baca header existing
-        existing_headers = [
-            str(c.value).strip() if c.value else ""
-            for c in next(ws.iter_rows(max_row=1))
-        ]
-        # Tambahkan header baru jika ada kolom tambahan
-        for key in all_keys:
-            if key not in existing_headers:
-                existing_headers.append(key)
-                ws.cell(row=1, column=len(existing_headers)).value = key
-    else:
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Anggota"
-        existing_headers = all_keys
-        for col, header in enumerate(existing_headers, 1):
-            cell = ws.cell(row=1, column=col, value=header)
-            cell.font = Font(bold=True)
-            cell.fill = PatternFill("solid", fgColor="1F4E79")
-            cell.font = Font(bold=True, color="FFFFFF")
-            cell.alignment = Alignment(horizontal="center")
-
-    # Append baris baru
-    count = 0
-    for member in members_with_id:
-        row_data = [member.get(h, "") for h in existing_headers]
-        ws.append(row_data)
-        count += 1
-
-    # Auto-width kolom
-    for col in ws.columns:
-        max_len = max((len(str(c.value or "")) for c in col), default=0)
-        ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
-
-    wb.save(str(MEMBER_EXCEL_PATH))
-    invalidate_cache()
-    logger.info("%d anggota berhasil disimpan ke %s", count, MEMBER_EXCEL_PATH.name)
-    return count
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Step 3: Generate gambar barcode
+# Step 1: Generate gambar QR Code
 # ══════════════════════════════════════════════════════════════════════════════
 
 def generate_barcode_images(
@@ -290,7 +72,7 @@ def generate_barcode_images(
     penamaan di modul ini.)
 
     Args:
-        members_with_id : list hasil assign_barcode_ids()
+        members_with_id : list anggota, tiap dict wajib punya EXCEL_COL_BARCODE
         barcode_dir     : folder output untuk gambar QR (default: BARCODE_DIR)
         on_progress     : callback(current, total) untuk progress bar GUI
 
@@ -325,7 +107,7 @@ def generate_barcode_images(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Step 4: Generate .docx kartu massal
+# Step 2: Generate .docx kartu massal
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _add_card_to_cell(
@@ -477,7 +259,7 @@ def _add_card_to_cell(
                 rx.font.size = Pt(8)
                 rx.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
 
-    # ── Sel kanan: gambar barcode ─────────────────────────────────────────────
+    # ── Sel kanan: gambar QR Code ─────────────────────────────────────────────
     right_cell = inner.cell(0, 1)
     right_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     set_cell_margin(right_cell, top=60, bottom=60, left=60, right=60)
@@ -525,7 +307,7 @@ def generate_cards_docx(
     """
     if cards_dir is None:
         cards_dir = CARDS_DIR
-    
+
     _ensure_dirs(BARCODE_DIR, cards_dir)
 
     doc = Document()
@@ -582,33 +364,31 @@ def generate_cards_docx(
 # ══════════════════════════════════════════════════════════════════════════════
 
 def run_card_generation(
-    source_excel_path: str | Path,
+    members: list[dict],
     school_name: str,
-    year: Optional[int] = None,
-    id_column: Optional[str] = None,
+    cards_per_row: int = CARDS_PER_ROW,
     output_dir: Optional[str | Path] = None,
     on_progress=None,
 ) -> dict:
     """
-    Jalankan seluruh pipeline pembuatan kartu massal.
+    Cetak kartu QR Code untuk anggota yang sudah terdaftar (dipilih dari
+    tab Anggota — lihat gui/card_tab.py). Tidak menulis apa pun ke
+    anggota.xlsx; pendaftaran anggota baru ada di gui/member_tab.py.
 
     Args:
-        source_excel_path : path file Excel sumber
-        school_name       : nama sekolah untuk header kartu
-        year              : tahun ID (hanya untuk mode generate otomatis)
-        id_column         : kolom kustom sebagai ID barcode (None = generate otomatis)
-        output_dir        : folder output kustom untuk barcode dan docx (default: assets/)
-        on_progress       : callback(stage, current, total)
+        members       : list anggota (dari core.card_generator.fetch_members())
+        school_name   : nama sekolah untuk header kartu
+        cards_per_row : jumlah kartu per baris (default 2)
+        output_dir    : folder output kustom untuk QR dan docx (default: assets/)
+        on_progress   : callback(stage, current, total)
 
     Returns dict dengan key:
         'members'     : list[dict] anggota yang diproses
         'docx_path'   : Path file .docx output
-        'barcode_dir' : Path folder gambar barcode
+        'barcode_dir' : Path folder gambar QR Code
         'count'       : int jumlah kartu dibuat
-        'warnings'    : list[str] baris yang dilewati
         'errors'      : list[str] error fatal
     """
-    # Setup output directories
     if output_dir is None:
         barcode_dir = BARCODE_DIR
         cards_dir = CARDS_DIR
@@ -616,55 +396,33 @@ def run_card_generation(
         output_dir = Path(output_dir)
         barcode_dir = output_dir / "barcode_images"
         cards_dir = output_dir / "kartu_output"
-    errors   = []
-    warnings = []
 
-    # Step 1: Baca sumber
-    new_members = read_source_excel(source_excel_path)
-    if not new_members:
-        return {"members": [], "count": 0, "warnings": [], "errors": ["Tidak ada data anggota di file sumber."]}
+    if not members:
+        return {"members": [], "count": 0, "errors": ["Tidak ada anggota yang dipilih."]}
 
-    # Step 2: Assign ID & simpan ke anggota.xlsx
-    members_with_id, warnings = assign_barcode_ids(
-        new_members,
-        year=year,
-        id_column=id_column,
-    )
-
-    if not members_with_id:
-        return {
-            "members": [], "count": 0,
-            "warnings": warnings,
-            "errors": ["Tidak ada anggota yang valid untuk diproses."],
-        }
-
-    save_to_member_excel(members_with_id)
-
-    # Step 3: Generate barcode images
     def prog_barcode(cur, tot):
         if on_progress:
             on_progress("barcode", cur, tot)
 
-    barcode_paths = generate_barcode_images(members_with_id, barcode_dir=barcode_dir, on_progress=prog_barcode)
+    barcode_paths = generate_barcode_images(members, barcode_dir=barcode_dir, on_progress=prog_barcode)
 
-    # Step 4: Generate .docx
     def prog_docx(cur, tot):
         if on_progress:
             on_progress("docx", cur, tot)
 
     docx_path = generate_cards_docx(
-        members_with_id,
+        members,
         barcode_paths,
         school_name=school_name,
+        cards_per_row=cards_per_row,
         cards_dir=cards_dir,
         on_progress=prog_docx,
     )
 
     return {
-        "members":     members_with_id,
+        "members":     members,
         "docx_path":   docx_path,
         "barcode_dir": barcode_dir,
-        "count":       len(members_with_id),
-        "warnings":    warnings,
-        "errors":      errors,
+        "count":       len(members),
+        "errors":      [],
     }

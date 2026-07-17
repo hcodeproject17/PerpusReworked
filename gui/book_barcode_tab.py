@@ -1,5 +1,5 @@
 """
-gui/book_barcode_tab.py — Tab cetak label barcode buku massal
+gui/book_barcode_tab.py — Tab cetak label QR Code buku massal
 
 Layout kolom kiri (fixed 310px) — alur UX:
   ┌─────────────┐
@@ -263,7 +263,7 @@ class BookBarcodeTab(QWidget):
         self._lbl_progress.setVisible(False)
         v.addWidget(self._lbl_progress)
 
-        self._btn_generate = QPushButton("▶  Generate Label Barcode")
+        self._btn_generate = QPushButton("▶  Generate Label QR Code")
         self._btn_generate.setObjectName("btnGenerate")
         self._btn_generate.setEnabled(False)
         self._btn_generate.clicked.connect(self._start_generation)
@@ -331,10 +331,10 @@ class BookBarcodeTab(QWidget):
         self._btn_open_label_dir.clicked.connect(self._open_label_folder)
         v.addWidget(self._btn_open_label_dir)
 
-        self._btn_open_barcode_dir = QPushButton("🖼  Folder Barcode PNG")
+        self._btn_open_barcode_dir = QPushButton("🖼  Folder QR Code PNG")
         self._btn_open_barcode_dir.setObjectName("btnOpenFile")
         self._btn_open_barcode_dir.setEnabled(False)
-        self._btn_open_barcode_dir.setToolTip("Buka folder gambar barcode PNG per buku")
+        self._btn_open_barcode_dir.setToolTip("Buka folder gambar QR Code PNG per buku")
         self._btn_open_barcode_dir.clicked.connect(self._open_barcode_dir_action)
         v.addWidget(self._btn_open_barcode_dir)
 
@@ -558,7 +558,7 @@ class BookBarcodeTab(QWidget):
     def _on_progress(self, stage: str, current: int, total: int) -> None:
         pct = int(current / total * 100) if total else 0
         self._progress_bar.setValue(pct)
-        label = {"barcode": "Generate barcode PNG", "docx": "Menyusun Word"}.get(stage, stage)
+        label = {"barcode": "Generate QR Code PNG", "docx": "Menyusun Word"}.get(stage, stage)
         self._lbl_progress.setText(f"{label}  {current}/{total}")
 
     def _on_finished(self, result: dict) -> None:
@@ -614,7 +614,7 @@ class BookBarcodeTab(QWidget):
 
     def _open_barcode_dir_action(self) -> None:
         if not self._result_barcode_dir:
-            QMessageBox.warning(self, "Belum Ada Output", "Belum ada barcode yang dihasilkan.")
+            QMessageBox.warning(self, "Belum Ada Output", "Belum ada QR Code yang dihasilkan.")
             return
         self._open_in_explorer(str(self._result_barcode_dir))
 

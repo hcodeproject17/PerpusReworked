@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
 
 from config import (
     MEMBER_EXCEL_PATH,
@@ -177,6 +178,18 @@ def search(query: str) -> list[dict]:
     return find_by_name(query)
 
 
+def extra_member_columns(members: list[dict]) -> list[str]:
+    """Kolom selain ID Barcode & Nama yang muncul di data anggota, urut
+    kemunculan pertama (mis. "Kelas", "NISN"). Dipakai gui/member_tab.py
+    (kolom tabel dinamis) dan gui/card_tab.py (filter per kolom)."""
+    extra: list[str] = []
+    for m in members:
+        for k in m.keys():
+            if k not in (EXCEL_COL_BARCODE, EXCEL_COL_NAME) and k not in extra:
+                extra.append(k)
+    return extra
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # CRUD tulis — dipakai oleh tab Daftar Anggota (gui/member_tab.py)
 #
@@ -189,8 +202,7 @@ def search(query: str) -> list[dict]:
 def generate_next_member_id(year: Optional[int] = None) -> str:
     """
     ID Barcode berikutnya format "{YYYY}-{NNNN}", melanjutkan nomor terbesar
-    di tahun yang sama. Dipakai tombol "Auto" di form tambah anggota — logika
-    sama seperti core/card_generator.py::_get_next_barcode_id.
+    di tahun yang sama. Dipakai tombol "Auto" di form tambah anggota.
     """
     year = year or datetime.now().year
     prefix = f"{year}-"
@@ -206,6 +218,127 @@ def generate_next_member_id(year: Optional[int] = None) -> str:
     ]
     next_num = (max(year_nums) + 1) if year_nums else 1
     return f"{year}-{next_num:04d}"
+
+
+def _assign_member_ids(
+    new_members: list[dict],
+    year: Optional[int] = None,
+    id_column: Optional[str] = None,
+) -> tuple[list[dict], list[str]]:
+    """
+    Tentukan ID Barcode untuk tiap anggota baru hasil read_source_excel().
+
+    Args:
+        id_column : None = generate otomatis (YYYY-NNNN) untuk semua baris;
+                    nama kolom = pakai nilai kolom itu sebagai ID Barcode
+                    (mis. "NISN"). Baris yang nilainya kosong di kolom itu
+                    tetap diberi ID otomatis (lihat warnings).
+
+    Returns:
+        (list anggota + key EXCEL_COL_BARCODE terisi, list pesan warning)
+    """
+    warnings: list[str] = []
+    year = year or datetime.now().year
+    try:
+        existing_ids = {m[EXCEL_COL_BARCODE].upper() for m in _load_raw()}
+    except FileNotFoundError:
+        existing_ids = set()
+
+    prefix = f"{year}-"
+    next_auto = 1
+    year_nums = [
+        int(bid[len(prefix):]) for bid in existing_ids
+        if bid.startswith(prefix) and bid[len(prefix):].isdigit()
+    ]
+    if year_nums:
+        next_auto = max(year_nums) + 1
+
+    result: list[dict] = []
+    for member in new_members:
+        nama = member.get(EXCEL_COL_NAME, "")
+        barcode_id = None
+
+        if id_column:
+            raw = member.get(id_column)
+            candidate = str(raw).strip() if raw is not None else ""
+            if candidate:
+                barcode_id = candidate
+            else:
+                warnings.append(f"'{nama}': kolom '{id_column}' kosong, ID di-generate otomatis.")
+
+        if not barcode_id:
+            while f"{year}-{next_auto:04d}".upper() in existing_ids:
+                next_auto += 1
+            barcode_id = f"{year}-{next_auto:04d}"
+            next_auto += 1
+
+        if barcode_id.upper() in existing_ids:
+            warnings.append(f"'{nama}': ID '{barcode_id}' sudah dipakai, baris dilewati.")
+            continue
+
+        existing_ids.add(barcode_id.upper())
+        member[EXCEL_COL_BARCODE] = barcode_id
+        result.append(member)
+
+    return result, warnings
+
+
+def _save_members_bulk(members_with_id: list[dict]) -> int:
+    """Tambahkan banyak anggota sekaligus ke anggota.xlsx, satu save di akhir
+    (lebih cepat dari memanggil add_member() berulang saat impor massal)."""
+    if not members_with_id:
+        return 0
+
+    wb, ws, headers = _open_or_create_workbook()
+
+    # Kolom baru dari data import (mis. "Kelas", "NISN") ditambahkan sebagai
+    # header baru kalau belum ada.
+    for member in members_with_id:
+        for key in member:
+            if key not in headers:
+                headers.append(key)
+                cell = ws.cell(row=1, column=len(headers), value=key)
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill("solid", fgColor="1F4E79")
+                cell.alignment = Alignment(horizontal="center")
+
+    for member in members_with_id:
+        ws.append([member.get(h, "") for h in headers])
+
+    wb.save(str(MEMBER_EXCEL_PATH))
+    wb.close()
+    invalidate_cache()
+    return len(members_with_id)
+
+
+def import_members_from_excel(
+    path: str | Path,
+    id_column: Optional[str] = None,
+    year: Optional[int] = None,
+) -> tuple[int, int, list[str]]:
+    """
+    Import massal anggota baru dari file Excel sumber (kolom wajib: "Nama").
+
+    Args:
+        id_column : None = ID Barcode digenerate otomatis; atau nama kolom
+                    sumber yang dipakai sebagai ID (mis. "NISN").
+
+    Returns:
+        (jumlah berhasil, jumlah dilewati, list pesan warning/error)
+    """
+    try:
+        new_members = read_source_excel(path)
+    except (FileNotFoundError, ValueError) as exc:
+        return 0, 0, [str(exc)]
+
+    if not new_members:
+        return 0, 0, ["Tidak ada data anggota (kolom 'Nama') di file sumber."]
+
+    members_with_id, warnings = _assign_member_ids(new_members, year=year, id_column=id_column)
+    ok = _save_members_bulk(members_with_id)
+    err = len(new_members) - ok
+    logger.info("Import anggota: %d berhasil, %d dilewati.", ok, err)
+    return ok, err, warnings
 
 
 def _open_or_create_workbook() -> tuple:

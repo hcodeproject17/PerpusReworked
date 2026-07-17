@@ -1,15 +1,19 @@
 """
-gui/member_tab.py — Tab Daftar Anggota (CRUD) PerpusReworked
+gui/member_tab.py — Tab Daftar Anggota (CRUD + Import) PerpusReworked
 
 Fitur:
 - Tabel daftar anggota + search real-time (nama / ID Barcode)
 - Kolom tabel dinamis: selalu ID Barcode + Nama, plus kolom tambahan apa pun
-  yang sudah ada di anggota.xlsx (mis. "Kelas", "NISN" — hasil import massal
-  lewat tab Cetak Kartu tetap terbaca & bisa diedit di sini)
-- Tambah anggota manual (ID Barcode bisa di-generate otomatis, format QR
-  sama seperti kartu massal: YYYY-NNNN)
+  yang sudah ada di anggota.xlsx (mis. "Kelas", "NISN")
+- Tambah anggota manual (ID Barcode bisa di-generate otomatis, format
+  YYYY-NNNN)
+- Import massal dari Excel — sumber ID Barcode bisa digenerate otomatis
+  atau dari kolom yang sudah ada di file sumber (mis. NISN)
 - Edit anggota terpilih (termasuk ganti ID Barcode-nya)
 - Hapus anggota (satu atau beberapa sekaligus)
+
+Cetak kartu anggota (QR Code) ada di tab terpisah (gui/card_tab.py), yang
+memuat anggota yang sudah tersimpan di sini untuk dicetak/dicetak ulang.
 
 Catatan: menghapus/mengganti ID anggota di sini tidak menghapus riwayat
 kunjungan atau peminjaman lama miliknya — riwayat itu tersimpan sebagai
@@ -26,12 +30,14 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QTableWidget, QTableWidgetItem, QMessageBox,
     QDialog, QFormLayout, QFrame, QAbstractItemView,
+    QProgressBar, QFileDialog, QComboBox,
 )
 
 from database.excel_reader import (
     load_members, search as search_members,
     add_member, update_member, delete_members_bulk,
-    generate_next_member_id,
+    generate_next_member_id, extra_member_columns,
+    import_members_from_excel, read_source_excel,
 )
 from config import EXCEL_COL_BARCODE, EXCEL_COL_NAME
 
@@ -57,6 +63,89 @@ class _LoadWorker(QThread):
             self.finished.emit([], "")
         except ValueError as exc:
             self.finished.emit([], str(exc))
+
+
+class _ImportWorker(QThread):
+    """Import massal Excel di background."""
+    finished = Signal(int, int, list)   # ok, err, warnings
+
+    def __init__(self, path: str, id_column: Optional[str] = None):
+        super().__init__()
+        self._path = path
+        self._id_column = id_column
+
+    def run(self):
+        ok, err, warnings = import_members_from_excel(self._path, id_column=self._id_column)
+        self.finished.emit(ok, err, warnings)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Dialog: konfirmasi Import Excel (pilih sumber ID Barcode)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ImportMembersDialog(QDialog):
+    """Dialog konfirmasi sebelum import massal: pilih sumber ID Barcode."""
+
+    def __init__(self, parent=None, headers: Optional[list[str]] = None, preview_count: int = 0):
+        super().__init__(parent)
+        self._headers = headers or []
+        self.setWindowTitle("Import Anggota dari Excel")
+        self.setMinimumWidth(400)
+        self.setModal(True)
+        self._build_ui(preview_count)
+
+    def _build_ui(self, preview_count: int) -> None:
+        root = QVBoxLayout(self)
+        root.setSpacing(14)
+        root.setContentsMargins(24, 20, 24, 20)
+
+        title = QLabel("Import Anggota dari Excel")
+        title.setObjectName("dialogTitle")
+        root.addWidget(title)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setObjectName("separator")
+        root.addWidget(sep)
+
+        lbl_count = QLabel(f"{preview_count} anggota ditemukan di file sumber.")
+        lbl_count.setObjectName("hintText")
+        root.addWidget(lbl_count)
+
+        lbl_field = QLabel("Sumber ID Barcode:")
+        root.addWidget(lbl_field)
+
+        self.combo = QComboBox()
+        self.combo.setObjectName("configCombo")
+        self.combo.addItem("Generate otomatis (YYYY-NNNN)", userData=None)
+        for h in self._headers:
+            if h.strip().lower() not in ("nama", "name"):
+                self.combo.addItem(f"Gunakan kolom: {h}", userData=h)
+        root.addWidget(self.combo)
+
+        hint = QLabel(
+            "Baris yang kosong di kolom ID terpilih akan tetap diberi ID otomatis "
+            "(tidak dilewati). Kolom lain apa pun di file sumber (mis. Kelas, NISN) "
+            "tetap ikut disimpan sebagai kolom tambahan."
+        )
+        hint.setObjectName("hintText")
+        hint.setWordWrap(True)
+        root.addWidget(hint)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_cancel = QPushButton("Batal")
+        btn_cancel.setObjectName("btnCancel")
+        btn_cancel.clicked.connect(self.reject)
+        btn_ok = QPushButton("Import")
+        btn_ok.setObjectName("btnPrimary")
+        btn_ok.clicked.connect(self.accept)
+        btn_row.addWidget(btn_cancel)
+        btn_row.addWidget(btn_ok)
+        root.addLayout(btn_row)
+
+    def selected_id_column(self) -> Optional[str]:
+        return self.combo.currentData()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -107,8 +196,8 @@ class MemberFormDialog(QDialog):
             w.setPlaceholderText(placeholder)
             return w
 
-        # ID Barcode — form baru dapat tombol "Auto" (generate ID + QR nanti
-        # digenerate ulang lewat tab Cetak Kartu); saat edit tetap bisa
+        # ID Barcode — form baru dapat tombol "Auto" (generate ID; QR Code
+        # fisiknya dicetak lewat tab Cetak Kartu); saat edit tetap bisa
         # diketik manual kalau memang perlu ganti ID.
         id_row = QHBoxLayout()
         self.inp_id = _line("Contoh: 2026-0001")
@@ -241,17 +330,20 @@ class MemberTab(QWidget):
         self.inp_search.textChanged.connect(self._on_search_changed)
 
         btn_add     = QPushButton("＋  Tambah Anggota")
+        btn_import  = QPushButton("📥  Import Excel")
         btn_edit    = QPushButton("✏️  Edit")
         btn_delete  = QPushButton("🗑  Hapus")
         btn_refresh = QPushButton("↺  Refresh")
 
         btn_add.setObjectName("btnPrimary")
+        btn_import.setObjectName("btnSecondary")
         btn_edit.setObjectName("btnSecondary")
         btn_delete.setObjectName("btnCancel")
         btn_refresh.setObjectName("btnSecondary")
 
         for btn, cb in [
             (btn_add,     self._on_add),
+            (btn_import,  self._on_import),
             (btn_edit,    self._on_edit),
             (btn_delete,  self._on_delete),
             (btn_refresh, self._do_load),
@@ -261,6 +353,7 @@ class MemberTab(QWidget):
         tb.addWidget(self.inp_search)
         tb.addStretch()
         tb.addWidget(btn_refresh)
+        tb.addWidget(btn_import)
         tb.addWidget(btn_edit)
         tb.addWidget(btn_delete)
         tb.addWidget(btn_add)
@@ -275,6 +368,14 @@ class MemberTab(QWidget):
         stats_layout.addWidget(self.lbl_total)
         stats_layout.addStretch()
         root.addWidget(stats_bar)
+
+        # ── Progress import ───────────────────────────────────────────────────
+        self.import_progress = QProgressBar()
+        self.import_progress.setObjectName("genProgress")
+        self.import_progress.setRange(0, 0)   # indeterminate
+        self.import_progress.setFixedHeight(4)
+        self.import_progress.hide()
+        root.addWidget(self.import_progress)
 
         # ── Tabel anggota ─────────────────────────────────────────────────────
         self.table = QTableWidget()
@@ -341,11 +442,7 @@ class MemberTab(QWidget):
     def _rebuild_columns(self, members: list[dict]) -> None:
         """ID Barcode + Nama selalu di depan; kolom lain (mis. Kelas, NISN)
         mengikuti union header yang muncul di data, urutan kemunculan pertama."""
-        extra_keys: list[str] = []
-        for m in members:
-            for k in m.keys():
-                if k not in (EXCEL_COL_BARCODE, EXCEL_COL_NAME) and k not in extra_keys:
-                    extra_keys.append(k)
+        extra_keys = extra_member_columns(members)
 
         self._columns = [
             ("ID Barcode", EXCEL_COL_BARCODE),
@@ -386,6 +483,58 @@ class MemberTab(QWidget):
 
     def _extra_headers(self) -> list[str]:
         return [k for (_, k) in self._columns if k not in (EXCEL_COL_BARCODE, EXCEL_COL_NAME)]
+
+    def _on_import(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Pilih File Excel Anggota Baru",
+            "",
+            "Excel Files (*.xlsx *.xls)",
+        )
+        if not path:
+            return
+
+        try:
+            preview = read_source_excel(path)
+        except Exception as exc:
+            QMessageBox.critical(self, "Gagal Baca File", str(exc))
+            return
+
+        if not preview:
+            QMessageBox.warning(self, "Kosong",
+                                "Tidak ada data anggota (kolom 'Nama') di file ini.")
+            return
+
+        headers = list(preview[0].keys())
+        dlg = ImportMembersDialog(self, headers=headers, preview_count=len(preview))
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        id_column = dlg.selected_id_column()
+
+        self.import_progress.show()
+        self.lbl_status.setText("Mengimpor data anggota dari Excel…")
+
+        self._import_worker = _ImportWorker(path, id_column=id_column)
+        self._import_worker.finished.connect(self._on_import_done)
+        self._import_worker.start()
+
+    def _on_import_done(self, ok: int, err: int, warnings: list[str]):
+        self.import_progress.hide()
+        self._do_load()
+
+        msg = f"Import selesai.\n\n✔ Berhasil : {ok} anggota\n✘ Dilewati  : {err} anggota"
+        if warnings:
+            detail = "\n".join(warnings[:20])
+            if len(warnings) > 20:
+                detail += f"\n… dan {len(warnings)-20} lainnya."
+            msg += f"\n\nDetail:\n{detail}"
+            QMessageBox.warning(self, "Hasil Import", msg)
+        else:
+            QMessageBox.information(self, "Hasil Import", msg)
+
+        self.lbl_status.setText(
+            f"✔ Import selesai: {ok} berhasil, {err} dilewati."
+        )
 
     def _on_add(self):
         dlg = MemberFormDialog(self, extra_headers=self._extra_headers())
